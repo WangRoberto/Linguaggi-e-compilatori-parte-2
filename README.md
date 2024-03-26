@@ -5,7 +5,7 @@ Primo assignment
 3. Multi-Instruction Optimization
 
 File da consegnare
-1. LocalOpts.cpp
-2. LocalOpts.h
-3. PassRegistry.def
-4. Eventuali altri file custom creati o modificati
+. LocalOpts.cpp
+. LocalOpts.h
+. PassRegistry.def
+. Eventuali altri file custom creati o modificati
