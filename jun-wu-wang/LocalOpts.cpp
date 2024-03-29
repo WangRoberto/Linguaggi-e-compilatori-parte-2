@@ -53,9 +53,7 @@ bool runOnBasicBlock(BasicBlock &B) {
   
     // Create shl instruction
     int32_t N = ImmediateValue.exactLogBase2();
-    LLVMContext &context = I.getContext(); 
-    IntegerType *Int32Type = IntegerType::get(context, 32);
-    ConstantInt *Shifts = ConstantInt::get(Int32Type, N);
+    ConstantInt *Shifts = ConstantInt::get(Immediate->getType(), N);
   
     Instruction *NewInst = BinaryOperator::Create(
     BinaryOperator::Shl, Val, Shifts);
