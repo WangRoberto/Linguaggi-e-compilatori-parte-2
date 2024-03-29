@@ -26,7 +26,28 @@ bool runOnBasicBlock(BasicBlock &B) {
     ConstantInt *C1 = dyn_cast<ConstantInt>(Op1);   // cast a costante
     ConstantInt *C2 = dyn_cast<ConstantInt>(Op2);
 
-    if( I.getOpcode() == Instruction::Mul ){
+    if( I.getOpcode() == Instruction::Add ){        //ottimizzazione add
+      
+        if ( C1 != nullptr && C1->isZero() ){
+          I.replaceAllUsesWith(Op2);
+           if (I.user_empty()) {
+                // Se non ha utilizzatori, aggiungila alla lista delle istruzioni da rimuovere
+                InstructionsToRemove.push_back(&I);
+         
+        }
+        else if ( C2 != nullptr && C2->isZero() ){
+          I.replaceAllUsesWith(Op1);
+           if (I.user_empty()) {
+                // Se non ha utilizzatori, aggiungila alla lista delle istruzioni da rimuovere
+                InstructionsToRemove.push_back(&I);
+            }
+        
+        }
+
+
+    } 
+
+    if( I.getOpcode() == Instruction::Mul ){        //ottimizzazione mul
       
         if ( C1 != nullptr && C1->isOne() ){        //controllo che l' operando sia una costante e con valore 1
           I.replaceAllUsesWith(Op2);                //rimpiazzo l' istruzione con l' operando diverso da 1 nelle
@@ -45,6 +66,10 @@ bool runOnBasicBlock(BasicBlock &B) {
         
         }
     } 
+
+
+
+
 
   }
 
