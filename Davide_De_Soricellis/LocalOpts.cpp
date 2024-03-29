@@ -18,7 +18,7 @@ bool runOnBasicBlock(BasicBlock &B) {
   
   // first optimization  
 
-  std::vector<Instruction*> InstructionsToRemove;
+  /*std::vector<Instruction*> InstructionsToRemove;
 
   for( Instruction &I : B ){
     Value *Op1 = I.getOperand(0);                   // primo operando
@@ -26,7 +26,28 @@ bool runOnBasicBlock(BasicBlock &B) {
     ConstantInt *C1 = dyn_cast<ConstantInt>(Op1);   // cast a costante
     ConstantInt *C2 = dyn_cast<ConstantInt>(Op2);
 
-    if( I.getOpcode() == Instruction::Mul ){
+    if( I.getOpcode() == Instruction::Add ){        //ottimizzazione add
+      
+        if ( C1 != nullptr && C1->isZero() ){
+          I.replaceAllUsesWith(Op2);
+           if (I.user_empty()) {
+                // Se non ha utilizzatori, aggiungila alla lista delle istruzioni da rimuovere
+                InstructionsToRemove.push_back(&I);
+         
+        }
+        else if ( C2 != nullptr && C2->isZero() ){
+          I.replaceAllUsesWith(Op1);
+           if (I.user_empty()) {
+                // Se non ha utilizzatori, aggiungila alla lista delle istruzioni da rimuovere
+                InstructionsToRemove.push_back(&I);
+            }
+        
+        }
+
+
+    } 
+
+    if( I.getOpcode() == Instruction::Mul ){        //ottimizzazione mul
       
         if ( C1 != nullptr && C1->isOne() ){        //controllo che l' operando sia una costante e con valore 1
           I.replaceAllUsesWith(Op2);                //rimpiazzo l' istruzione con l' operando diverso da 1 nelle
@@ -46,6 +67,10 @@ bool runOnBasicBlock(BasicBlock &B) {
         }
     } 
 
+
+
+
+
   }
 
     // Rimuovi le istruzioni che non hanno utilizzatori
@@ -54,6 +79,124 @@ bool runOnBasicBlock(BasicBlock &B) {
   }
 
   //end first optimization
+
+  */
+
+  //second optimization
+
+  std::vector<Instruction*> InstructionsToRemove;
+
+  for (Instruction &I : B) {
+        // Controlla se l'istruzione è di tipo moltiplicazione
+        if (I.getOpcode() == Instruction::Mul) {                              //ottimizzazione moltiplicazione
+
+            Value *Op1 = I.getOperand(0);
+            Value *Op2 = I.getOperand(1);
+            ConstantInt *C1 = dyn_cast<ConstantInt>(Op1);
+            ConstantInt *C2 = dyn_cast<ConstantInt>(Op2);
+            ConstantInt *shift = nullptr;
+            
+            if( C1 != nullptr ){
+               
+               
+               unsigned int sh = C1->getValue().nearestLogBase2();                        // shift intero
+               int val = C1->getSExtValue();
+               int pot2 = 1 << sh;
+               shift = ConstantInt::get(C1->getType(),C1->getValue().nearestLogBase2());  // ConstantInt shift
+               
+               Instruction *S = BinaryOperator::Create(Instruction::Shl,I.getOperand(1),shift); //instruction shift
+               S->insertAfter(&I);
+               
+               if( pot2 < val ){                                                            //aggiungo delle add
+                  for( int i = pot2 ; i < val ; i++ ){
+                    Instruction* prec = S;
+                    S = BinaryOperator::Create(Instruction::Add, prec, I.getOperand(1));
+                    S->insertAfter(prec);
+                  }
+
+               }
+               else if( pot2 > val ){
+                  for( int i = val ; i < pot2 ; i++ ){                                      //aggiungo delle sub
+                    Instruction* prec = S;
+                    S = BinaryOperator::Create(Instruction::Sub, prec, I.getOperand(1));
+                    S->insertAfter(prec);
+                  }
+
+               }
+              
+
+
+
+             I.replaceAllUsesWith(S);
+             if (I.user_empty()) {
+                // Se non ha utilizzatori, aggiungila alla lista delle istruzioni da rimuovere
+                InstructionsToRemove.push_back(&I);
+            }
+                
+            }
+            else if( C2 != nullptr ){
+                
+               unsigned int sh = C2->getValue().nearestLogBase2();                        // shift intero
+               int val = C2->getSExtValue();
+               int pot2 = 1 << sh;
+               shift = ConstantInt::get(C2->getType(),C2->getValue().nearestLogBase2());  // ConstantInt shift
+               
+               Instruction *S = BinaryOperator::Create(Instruction::Shl,I.getOperand(0),shift); //instruction shift
+               S->insertAfter(&I);
+               
+               if( pot2 < val ){
+                  for( int i = pot2 ; i < val ; i++ ){
+                    Instruction* prec = S;
+                    S = BinaryOperator::Create(Instruction::Add, prec, I.getOperand(0));
+                    S->insertAfter(prec);
+                  }
+               }
+               else if( pot2 > val ){
+                  for( int i = val ; i < pot2 ; i++ ){
+                    Instruction* prec = S;
+                    S = BinaryOperator::Create(Instruction::Sub, prec, I.getOperand(0));
+                    S->insertAfter(prec);
+                  }
+               }
+
+
+              I.replaceAllUsesWith(S);
+              if (I.user_empty()) {
+                // Se non ha utilizzatori, aggiungila alla lista delle istruzioni da rimuovere
+                InstructionsToRemove.push_back(&I);
+              }
+            }
+        }
+
+        else if(I.getOpcode() == Instruction::SDiv ){                         //ottimizzazione divisione
+          Value *Op1 = I.getOperand(0);
+          Value *Op2 = I.getOperand(1);
+          //ConstantInt *C1 = dyn_cast<ConstantInt>(Op1);
+          ConstantInt *C2 = dyn_cast<ConstantInt>(Op2);
+          ConstantInt *shift = nullptr;
+
+          if( C2 != nullptr && C2->getValue().isPowerOf2() ){                               //controllo che il divisore sia una potenza di 2
+            shift = ConstantInt::get(C2->getType(),C2->getValue().exactLogBase2());
+            Instruction *NewInst = BinaryOperator::Create(Instruction::AShr, Op1, shift);
+            NewInst->insertAfter(&I);
+            I.replaceAllUsesWith(NewInst);
+            if (I.user_empty()) {
+              // Se non ha utilizzatori, aggiungila alla lista delle istruzioni da rimuovere
+              InstructionsToRemove.push_back(&I);
+            }
+          }
+
+
+
+        }
+
+    }
+
+      // Rimuovi le istruzioni che non hanno utilizzatori
+    for (Instruction *I : InstructionsToRemove) {
+        I->eraseFromParent();
+    }
+
 
     return true;
 }
