@@ -16,38 +16,71 @@ using namespace llvm;
 bool runOnBasicBlock(BasicBlock &B){
   for(Instruction &Instr : B){
   //for(auto &Instr = B.begin(); Instr != B.end(); ++Instr){
-  
-  //In caso sia un operatore binario
-    if(dyn_cast<BinaryOperator>(&Instr)){
-      if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr.getOperand(1))){
+
+    int nonConstante;
+
+    //First optimization
+    if(Instr.getOpcode() == Instruction::Add){
+      for(unsigned int i = 0; i < Instr.getNumOperands(); i++){
+        nonConstante = 0;
+        if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr.getOperand(1))){
             APInt c = conInt->getValue();
-            if(c.isPowerOf2()){
-              unsigned int cont = c.exactLogBase2(); // cambiare con exact
-              Value* op = reinterpret_cast<Value*>(cont);
-              Instruction *NewInst = BinaryOperator::Create(
-              Instruction::Shl, Instr.getOperand(0), op);
+            if(i == 0){
+              nonConstante = 1;
+            }
+            if(c.isZero()){
+              Instruction *NewInst = Instr.getOperand(nonConstante);
               NewInst->insertAfter(&Instr);
               Instr.replaceAllUsesWith(NewInst);
               return true;
           }
         }
+      }
     }
+
+    //Second optimization
+    //In caso sia un operatore binario
+      /*
+      if(dyn_cast<BinaryOperator>(&Instr)){
+        if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr.getOperand(1))){
+              APInt c = conInt->getValue();
+              if(c.isPowerOf2()){
+                unsigned int cont = c.exactLogBase2(); // cambiare con exact
+                Value* op = reinterpret_cast<Value*>(cont);
+                Instruction *NewInst = BinaryOperator::Create(
+                Instruction::Shl, Instr.getOperand(0), op);
+                NewInst->insertAfter(&Instr);
+                Instr.replaceAllUsesWith(NewInst);
+                return true;
+            }
+          }
+      }*/
 
     if(Instr.getOpcode() == Instruction::Mul){
       for(unsigned int i = 0; i < Instr.getNumOperands(); i++){//itera gli operandi per vedere se c'è una costante
-          if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr.getOperand(i))){
-            APInt c = conInt->getValue();
-            if(c.isPowerOf2()){
-              unsigned int cont = c.exactLogBase2(); // cambiare con exact
-              Value* op = reinterpret_cast<Value*>(cont);
-              //Constant *op = ConstantInt::get(conInt->getType(), conInt->getValue().exactLogBase2());
-              Instruction *NewInst = BinaryOperator::Create(
-              Instruction::Shl, Instr.getOperand(0), op);
-              NewInst->insertAfter(&Instr);
-              Instr.replaceAllUsesWith(NewInst);
-              return true;
+        nonConstante = 0;
+        if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr.getOperand(i))){
+          APInt c = conInt->getValue();
+          if(i == 0){
+            nonConstante = 1;
           }
+          if(c.isOne()){
+            Instruction *NewInst = Instr.getOperand(nonConstante);
+            NewInst->insertAfter(&Instr);
+            Instr.replaceAllUsesWith(NewInst);
+            return true;
+          }
+          if(c.isPowerOf2()){
+            unsigned int cont = c.exactLogBase2(); // cambiare con exact
+            Value* op = reinterpret_cast<Value*>(cont);
+            //Constant *op = ConstantInt::get(conInt->getType(), conInt->getValue().exactLogBase2());
+            Instruction *NewInst = BinaryOperator::Create(
+            Instruction::Shl, Instr.getOperand(nonConstante), op);
+            NewInst->insertAfter(&Instr);
+            Instr.replaceAllUsesWith(NewInst);
+            return true;
         }
+      }
       }
     }
   }
