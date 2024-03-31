@@ -10,23 +10,40 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/InstrTypes.h"
 
-
 using namespace llvm;
+
 
 bool runOnBasicBlock(BasicBlock &B){
   for(Instruction &Instr : B){
   //for(auto &Instr = B.begin(); Instr != B.end(); ++Instr){
-    if(Instr.getOpCode() == Instruction::Mul){
-      for(int i = 0; i < Instr.getNumOperand(); i++){        //itera gli operandi per vedere se c'è una costante
-          if(dyn_cast<CostantInt>(Instr.getOperand(i))){
-            APInt c = Instr.getOperand(i).getValue();
-            if(c.isPowerOf2() ){
-              unsigned int cont = c.logBase2(); // cambiare con exact
-              
-              //creare un operando con il valore cont
+  
+  //In caso sia un operatore binario
+    if(dyn_cast<BinaryOperator>(&Instr)){
+      if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr.getOperand(1))){
+            APInt c = conInt->getValue();
+            if(c.isPowerOf2()){
+              unsigned int cont = c.exactLogBase2(); // cambiare con exact
+              Value* op = reinterpret_cast<Value*>(cont);
               Instruction *NewInst = BinaryOperator::Create(
-              Instruction::Shl, Instr.getOperand(0), cont);
-              NewInst->insertAfter(Instr);
+              Instruction::Shl, Instr.getOperand(0), op);
+              NewInst->insertAfter(&Instr);
+              Instr.replaceAllUsesWith(NewInst);
+              return true;
+          }
+        }
+    }
+
+    if(Instr.getOpcode() == Instruction::Mul){
+      for(unsigned int i = 0; i < Instr.getNumOperands(); i++){//itera gli operandi per vedere se c'è una costante
+          if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr.getOperand(i))){
+            APInt c = conInt->getValue();
+            if(c.isPowerOf2()){
+              unsigned int cont = c.exactLogBase2(); // cambiare con exact
+              Value* op = reinterpret_cast<Value*>(cont);
+              //Constant *op = ConstantInt::get(conInt->getType(), conInt->getValue().exactLogBase2());
+              Instruction *NewInst = BinaryOperator::Create(
+              Instruction::Shl, Instr.getOperand(0), op);
+              NewInst->insertAfter(&Instr);
               Instr.replaceAllUsesWith(NewInst);
               return true;
           }
@@ -37,7 +54,8 @@ bool runOnBasicBlock(BasicBlock &B){
   return false;
 }
 
-/* bool runOnBasicBlock(BasicBlock &B) {
+/*
+bool runOnBasicBlock(BasicBlock &B) {
     
     // Preleviamo le prime due istruzioni del BB
     Instruction &Inst1st = *B.begin(), &Inst2nd = *(++B.begin());
@@ -91,7 +109,7 @@ bool runOnBasicBlock(BasicBlock &B){
 
     return true;
   }
- */
+*/
 
 bool runOnFunction(Function &F) {
   bool Transformed = false;
@@ -108,6 +126,7 @@ bool runOnFunction(Function &F) {
 
 PreservedAnalyses LocalOpts::run(Module &M,
                                       ModuleAnalysisManager &AM) {
+
   for (auto Fiter = M.begin(); Fiter != M.end(); ++Fiter)
     if (runOnFunction(*Fiter))
       return PreservedAnalyses::none();
