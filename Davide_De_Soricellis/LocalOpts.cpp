@@ -84,7 +84,7 @@ bool runOnBasicBlock(BasicBlock &B) {
 
   //second optimization
 
-  std::vector<Instruction*> InstructionsToRemove;
+  /*std::vector<Instruction*> InstructionsToRemove;
 
   for (Instruction &I : B) {
         // Controlla se l'istruzione è di tipo moltiplicazione
@@ -196,9 +196,94 @@ bool runOnBasicBlock(BasicBlock &B) {
     for (Instruction *I : InstructionsToRemove) {
         I->eraseFromParent();
     }
+    */
+
+    // third optimization
+    std::vector<Instruction*> InstructionsToRemove;
+    
+    for ( Instruction &I : B ){
+      Value *Op1 = I.getOperand(0);
+      Value *Op2 = I.getOperand(1);
+      ConstantInt *C1 = dyn_cast<ConstantInt>(Op1);
+      ConstantInt *C2 = dyn_cast<ConstantInt>(Op2);
+
+      ConstantInt *Cu1 = nullptr;
+      ConstantInt *Cu2 = nullptr;
+      
+      if ( I.getOpcode() == Instruction::Add ){              
+           for (auto Iter = I.user_begin(); Iter != I.user_end(); ++Iter){ 
+              User *Inst = *Iter;
+              Instruction *InstUser = dyn_cast<Instruction>(Inst);
+              if( InstUser != nullptr && InstUser->getOpcode() == Instruction::Sub){
+                //Cu1 = dyn_cast<ConstantInt>(InstUser->getOperand(0));
+                Cu2 = dyn_cast<ConstantInt>(InstUser->getOperand(1));
+                
+             
+
+                if( Cu2 != nullptr ){
+                  if( C1 != nullptr && C1->getSExtValue() == Cu2->getSExtValue() ){
+                    //errs() << "Ottimizzo istruzione(primo op) " << *InstUser << " con " << I << "\n";
+                    InstUser->replaceAllUsesWith(Op2);
+                    if (InstUser->user_empty()) {
+                        // Se non ha utilizzatori, aggiungila alla lista delle istruzioni da rimuovere
+                        InstructionsToRemove.push_back(InstUser);
+                    }
+                  }
+                  else if( C2 != nullptr && C2->getSExtValue() == Cu2->getSExtValue() ){
+                    //errs() << "Ottimizzo istruzione(secondo op) " << *InstUser << " con " << I << "\n";
+                    InstUser->replaceAllUsesWith(Op1);
+                    if (InstUser->user_empty()) {
+                        // Se non ha utilizzatori, aggiungila alla lista delle istruzioni da rimuovere
+                        InstructionsToRemove.push_back(InstUser);
+                    }
+                  }
+                
+                }     
+              
+              }
+            }
+           
+      }
+
+      else if ( I.getOpcode() == Instruction::Sub ){              
+           for (auto Iter = I.user_begin(); Iter != I.user_end(); ++Iter){ 
+              User *Inst = *Iter;
+              Instruction *InstUser = dyn_cast<Instruction>(Inst);
+              if( InstUser != nullptr && InstUser->getOpcode() == Instruction::Add){
+                Cu1 = dyn_cast<ConstantInt>(InstUser->getOperand(0));
+                Cu2 = dyn_cast<ConstantInt>(InstUser->getOperand(1));
+                
+             
+
+                if( C2 != nullptr ){
+                  if( (Cu1 != nullptr && Cu1->getSExtValue() == C2->getSExtValue() )||( Cu2 != nullptr && Cu2->getSExtValue() == C2->getSExtValue())){
+                    //errs() << "Ottimizzo istruzione(primo op) " << *InstUser << " con " << I << "\n";
+                    InstUser->replaceAllUsesWith(Op1);
+                    if (InstUser->user_empty()) {
+                        // Se non ha utilizzatori, aggiungila alla lista delle istruzioni da rimuovere
+                        InstructionsToRemove.push_back(InstUser);
+                    }
+                  }
+                  
+                
+                }     
+              
+              }
+            }
+         
+      }
+
+    }
+    // Rimuovi le istruzioni che non hanno utilizzatori
+    for (Instruction *I : InstructionsToRemove)
+        I->eraseFromParent();
+
+    // end third optimization
 
 
     return true;
+
+
 }
 
 bool runOnFunction(Function &F) {
