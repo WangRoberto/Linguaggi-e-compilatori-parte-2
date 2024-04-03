@@ -15,6 +15,142 @@
 
 using namespace llvm;
 
+bool optimizeAdd(BinaryOperator &BinaryI) {
+  for (unsigned i = 0; i < BinaryI.getNumOperands(); ++i) {
+    // Check if operand is an immediate
+    ConstantInt *Immediate = dyn_cast<ConstantInt>(BinaryI.getOperand(i));
+    if (!Immediate) {
+      continue;
+    }
+
+    // Check if other operand is an Instruction
+    Instruction *Operand = dyn_cast<Instruction>(BinaryI.getOperand((i+1)%BinaryI.getNumOperands()));
+    if (!Operand) {
+      continue;
+    }
+    
+    // Check if other operand is a BinaryOperator
+    BinaryOperator *BinaryOperand = dyn_cast<BinaryOperator>(Operand);
+    if (!BinaryOperand) {
+      continue;
+    }
+
+    // Check if other operand is a Sub Instruction
+    if (BinaryOperand->getOpcode() != Instruction::Sub) {
+      continue;
+    }
+
+    // Check if the second operand of the sub instruction is an immediate
+    ConstantInt *OperandImmediate = dyn_cast<ConstantInt>(BinaryOperand->getOperand(1));
+    if (!OperandImmediate) {
+      continue;
+    }
+
+    // Check if the value of the immediate of the instruction and the immediate of the Sub Instruction match
+    APInt OperandImmediateValue = OperandImmediate->getValue();
+    APInt ImmediateValue = Immediate->getValue();
+    if (OperandImmediateValue != ImmediateValue) {
+      continue;
+    }
+
+    // Replace the Instruction with the other operand of the Sub Instruction
+    Value *Val = BinaryOperand->getOperand(0);
+    BinaryI.replaceAllUsesWith(Val);
+    return true;
+  }
+
+  return false;
+}
+
+bool optimizeSub(BinaryOperator &BinaryI) {
+  // Check if the second operand is an immediate
+  ConstantInt *Immediate = dyn_cast<ConstantInt>(BinaryI.getOperand(1));
+  if (!Immediate) {
+    return false;
+  }
+
+  // Check if the first operand is an Instruction
+  Instruction *Operand = dyn_cast<Instruction>(BinaryI.getOperand(0));
+  if (!Operand) {
+    return false;
+  }
+
+  // Check if the first operand is a BinaryOperator
+  BinaryOperator *BinaryOperand = dyn_cast<BinaryOperator>(Operand);
+  if (!BinaryOperand) {
+    return false;
+  }
+  
+  // Check if the first operand is an Add Instruction
+  if (BinaryOperand->getOpcode() != Instruction::Add) {
+    return false;
+  }
+
+  for (unsigned i = 0; i < BinaryOperand->getNumOperands(); ++i) {
+    // Check if the operand an immediate
+    ConstantInt *OperandImmediate = dyn_cast<ConstantInt>(BinaryOperand->getOperand(i));
+    if (!OperandImmediate) {
+      continue;
+    }
+
+    // Check if the value of the immediate of the instruction and the immediate of the Add Instruction match
+    APInt OperandImmediateValue = OperandImmediate->getValue();
+    APInt ImmediateValue = Immediate->getValue();
+    if (OperandImmediateValue != ImmediateValue) {
+      continue;
+    }
+    
+    // Replace the Instruction with the other operand of the Add Instruction
+    Value *Val = BinaryOperand->getOperand((i+1)%(BinaryOperand->getNumOperands()));
+    BinaryI.replaceAllUsesWith(Val);
+    return true;
+  }
+
+  return false;
+}
+
+bool runOnBasicBlockMultiInstructionOptimization(BasicBlock &B) {
+  bool Transformed = false;
+  std::vector<Instruction*> toErase;
+
+  for (auto Iter = B.begin(); Iter != B.end(); ++Iter) {
+    Instruction &I = *Iter;
+    // Check if the instruction is a BinaryOperator
+    BinaryOperator *BinaryI = dyn_cast<BinaryOperator>(&I);
+    if (!BinaryI) {
+      continue;
+    }
+
+    // Optimize the instruction
+    bool optimized = false;
+    if (BinaryI->getOpcode() == Instruction::Add) {
+      optimized = optimizeAdd(*BinaryI);
+    } else if (BinaryI->getOpcode() == Instruction::Sub) {
+      optimized = optimizeSub(*BinaryI);
+    } else {
+      continue;
+    }
+
+    if (!optimized) {
+      continue;
+    }
+
+    // Add old instruction to vector of instructions to be erased
+    toErase.push_back(&I);
+
+    outs() << *BinaryI << " has been erased (multi-instruction optimization)\n";
+    Transformed = true;
+  }
+
+  // Erase old instructions
+  for (auto Iter = toErase.begin(); Iter != toErase.end(); ++Iter) {
+    Instruction &InstToErase = **Iter;
+    InstToErase.eraseFromParent();
+  }
+
+  return Transformed;
+}
+
 bool optimizeSDiv(BinaryOperator &BinaryI) {
   // Check if the second operand is an immediate
   ConstantInt *Immediate = dyn_cast<ConstantInt>(BinaryI.getOperand(1));
@@ -107,24 +243,23 @@ bool runOnBasicBlockStrengthReduction(BasicBlock &B) {
       continue;
     }
 
-    // Check if the instruction in a mul or sdiv
-    if (BinaryI->getOpcode() != Instruction::Mul && BinaryI->getOpcode() != Instruction::SDiv) {
+    // Optimize the instruction
+    bool optimized = false;
+    if (BinaryI->getOpcode() == Instruction::Mul) {
+      optimized = optimizeMul(*BinaryI);
+    } else if (BinaryI->getOpcode() == Instruction::SDiv) {
+      optimized = optimizeSDiv(*BinaryI);
+    } else {
       continue;
     }
 
-    // Optimize the instruction
-    bool optimized = false;
-    if (BinaryI->getOpcode() != Instruction::Mul) {
-      optimized = optimizeSDiv(*BinaryI);
-    } else {
-      optimized = optimizeMul(*BinaryI);
+    if (!optimized) {
+      continue;
     }
 
     // Add old instruction to vector of instructions to be erased
-    if (optimized) {
-      toErase.push_back(&I);
-      Transformed = true;
-    }
+    toErase.push_back(&I);
+    Transformed = true;
   }
 
   // Erase old instructions
@@ -210,6 +345,14 @@ bool runOnFunction(Function &F, std::function<bool(BasicBlock&)> runOnBasicBlock
   }
 
   return Transformed;
+}
+
+PreservedAnalyses MultiInstructionOptimization::run(Module &M, ModuleAnalysisManager &AM) {
+  for (auto Fiter = M.begin(); Fiter != M.end(); ++Fiter)
+    if (runOnFunction(*Fiter, runOnBasicBlockMultiInstructionOptimization))
+      return PreservedAnalyses::none();
+  
+  return PreservedAnalyses::all();
 }
 
 PreservedAnalyses StrengthReduction::run(Module &M, ModuleAnalysisManager &AM) {

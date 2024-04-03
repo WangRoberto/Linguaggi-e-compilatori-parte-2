@@ -128,8 +128,9 @@ MODULE_PASS("memprof-module", ModuleMemProfilerPass())
 MODULE_PASS("poison-checking", PoisonCheckingPass())
 MODULE_PASS("pseudo-probe-update", PseudoProbeUpdatePass())
 MODULE_PASS("testpass", TestPass())
-MODULE_PASS("strengthreduction", StrengthReduction())
-MODULE_PASS("algebraicidentity", AlgebraicIdentity())
+MODULE_PASS("multi-instruction-optimization", MultiInstructionOptimization())
+MODULE_PASS("strength-reduction", StrengthReduction())
+MODULE_PASS("algebraic-identity", AlgebraicIdentity())
 #undef MODULE_PASS
 
 #ifndef MODULE_PASS_WITH_PARAMS

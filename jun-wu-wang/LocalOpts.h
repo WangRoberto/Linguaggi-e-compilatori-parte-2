@@ -3,6 +3,11 @@
 #include "llvm/IR/PassManager.h"
 #include <llvm/IR/Constants.h>
 namespace llvm {
+class MultiInstructionOptimization : public PassInfoMixin<MultiInstructionOptimization> {
+public:
+PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+};
+
 class StrengthReduction : public PassInfoMixin<StrengthReduction> {
 public:
 PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
