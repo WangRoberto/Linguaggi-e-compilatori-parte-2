@@ -15,19 +15,21 @@
 
 using namespace llvm;
 
-bool optimizeUdiv(BinaryOperator &BinaryI) {
+bool optimizeSDiv(BinaryOperator &BinaryI) {
+  // Check if the second operand is an immediate
   ConstantInt *Immediate = dyn_cast<ConstantInt>(BinaryI.getOperand(1));
   Value *Val = BinaryI.getOperand(0);
   if (!Immediate) {
     return false;
   }
 
+  // Check if the second operand is a power of 2
   APInt ImmediateValue = Immediate->getValue();
   if (!ImmediateValue.isPowerOf2()) {
     return false;
   }
 
-  // Create shl instruction
+  // Create lshr instruction
   int32_t N = ImmediateValue.exactLogBase2();
   ConstantInt *Shifts = ConstantInt::get(Immediate->getType(), N);
 
@@ -105,7 +107,7 @@ bool runOnBasicBlockStrengthReduction(BasicBlock &B) {
       continue;
     }
 
-    // Check if the instruction in a mul or udiv
+    // Check if the instruction in a mul or sdiv
     if (BinaryI->getOpcode() != Instruction::Mul && BinaryI->getOpcode() != Instruction::SDiv) {
       continue;
     }
@@ -113,7 +115,7 @@ bool runOnBasicBlockStrengthReduction(BasicBlock &B) {
     // Optimize the instruction
     bool optimized = false;
     if (BinaryI->getOpcode() != Instruction::Mul) {
-      optimized = optimizeUdiv(*BinaryI);
+      optimized = optimizeSDiv(*BinaryI);
     } else {
       optimized = optimizeMul(*BinaryI);
     }
