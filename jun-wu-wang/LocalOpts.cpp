@@ -78,16 +78,16 @@ bool optimizeMul(BinaryOperator &BinaryI) {
         Instruction &prev = *NewInst;
 	NewInst = BinaryOperator::Create(BinaryOperator::Add, &prev, Val);
 	NewInst->insertAfter(&prev);
-	str = "and an add";
+	str = " and an add";
       } else if ((diff-1) == -1) {
         Instruction &prev = *NewInst;
 	NewInst = BinaryOperator::Create(BinaryOperator::Sub, &prev, Val);
 	NewInst->insertAfter(&prev);
-	str = "and a sub";
+	str = " and a sub";
       }
       BinaryI.replaceAllUsesWith(NewInst);
   
-      outs() << BinaryI << " has been replaced by a shl " << str << " instruction (strength reduction)\n";
+      outs() << BinaryI << " has been replaced by a shl" << str << " instruction (strength reduction)\n";
   
       return true;
     }
