@@ -76,14 +76,14 @@ bool optimizeMul(BinaryOperator &BinaryI) {
       std::string str = "";
       if ((diff-1) == 1) {
         Instruction &prev = *NewInst;
-	NewInst = BinaryOperator::Create(BinaryOperator::Add, &prev, Val);
-	NewInst->insertAfter(&prev);
-	str = " and an add";
-      } else if ((diff-1) == -1) {
-        Instruction &prev = *NewInst;
 	NewInst = BinaryOperator::Create(BinaryOperator::Sub, &prev, Val);
 	NewInst->insertAfter(&prev);
 	str = " and a sub";
+      } else if ((diff-1) == -1) {
+        Instruction &prev = *NewInst;
+	NewInst = BinaryOperator::Create(BinaryOperator::Add, &prev, Val);
+	NewInst->insertAfter(&prev);
+	str = " and an add";
       }
       BinaryI.replaceAllUsesWith(NewInst);
   
