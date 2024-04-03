@@ -48,8 +48,8 @@ bool optimizeMul(BinaryOperator &BinaryI) {
   // Check if there are immediate operands powers of 2 or "almost" power of 2
   int32_t diff = 1;
   for (unsigned i = 0; i < 3; ++i, diff = (diff+1)%3) {
-    for (unsigned Iter = 0; Iter != BinaryI.getNumOperands(); ++Iter) {
-      ConstantInt *Immediate = dyn_cast<ConstantInt>(BinaryI.getOperand(Iter));
+    for (unsigned j = 0; j != BinaryI.getNumOperands(); ++j) {
+      ConstantInt *Immediate = dyn_cast<ConstantInt>(BinaryI.getOperand(j));
       if (!Immediate) {
         continue;
       }
@@ -61,7 +61,7 @@ bool optimizeMul(BinaryOperator &BinaryI) {
         continue;
       }
   
-      Value* Val = BinaryI.getOperand((Iter+1)%(BinaryI.getNumOperands()));
+      Value* Val = BinaryI.getOperand((j+1)%(BinaryI.getNumOperands()));
 
       // Create shl instruction
       int32_t N = ImmediateValue.exactLogBase2();
@@ -128,8 +128,8 @@ bool runOnBasicBlockStrengthReduction(BasicBlock &B) {
   }
 
   // Erase old instructions
-  for (auto it = toErase.rbegin(); it != toErase.rend(); ++it) {
-    Instruction &InstToErase = **it;
+  for (auto Iter = toErase.begin(); Iter != toErase.end(); ++Iter) {
+    Instruction &InstToErase = **Iter;
     InstToErase.eraseFromParent();
   }
 
@@ -147,24 +147,40 @@ bool runOnBasicBlockAlgebraicIdentity(BasicBlock &B) {
     if (!BinaryI) {
       continue;
     }
-
-    // Check if there is and eventually which operand is an immediate
-    ConstantInt *Immediate = dyn_cast<ConstantInt>(BinaryI->getOperand(0));
-    Value *Val = BinaryI->getOperand(1);
-    if (!Immediate) {
-      Immediate = dyn_cast<ConstantInt>(BinaryI->getOperand(1));
-      Val = BinaryI->getOperand(0);
-      if (!Immediate) {
-	continue;
-      }
-    }
-
-    // Check if the instruction is an add or a mul, and also an algebraic identity
-    APInt ImmediateValue = Immediate->getValue();
-    if (!(BinaryI->getOpcode() == Instruction::Add && ImmediateValue == 0) && !(BinaryI->getOpcode() == Instruction::Mul && ImmediateValue == 1)) {      
+    
+    // Check if the instruction is an add or a mul
+    int32_t Identity;
+    if (BinaryI->getOpcode() == Instruction::Add) {
+      Identity = 0;
+    } else if (BinaryI->getOpcode() == Instruction::Mul) {
+      Identity = 1;
+    } else {
       continue;
     }
+
+    // Check if it is an algebraic identity
+    Value *Val = nullptr;
+    for (unsigned i = 0; i < BinaryI->getNumOperands(); ++i) {
+      // Check if operand is an immediate
+      ConstantInt *Immediate = dyn_cast<ConstantInt>(BinaryI->getOperand(i));
+      if (!Immediate) {
+        continue;
+      }
+
+      // Check if immediate is an identity
+      APInt ImmediateValue = Immediate->getValue();
+      if (ImmediateValue != Identity) {
+        continue;
+      }
+
+      Val = BinaryI->getOperand((i+1)%(BinaryI->getNumOperands()));
+      break;
+    }
       
+    if (!Val) {
+      continue;
+    }
+
     // Replace the uses of the instruction with its operand
     I.replaceAllUsesWith(Val);
 
@@ -176,8 +192,8 @@ bool runOnBasicBlockAlgebraicIdentity(BasicBlock &B) {
   }
 
   // Erase algebraic identities
-  for (auto it = toErase.rbegin(); it != toErase.rend(); ++it) {
-    Instruction &InstToErase = **it;
+  for (auto Iter = toErase.begin(); Iter != toErase.end(); ++Iter) {
+    Instruction &InstToErase = **Iter;
     InstToErase.eraseFromParent();
   }
 
