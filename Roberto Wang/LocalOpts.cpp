@@ -79,8 +79,8 @@ bool runOnBasicBlock(BasicBlock &B){
             NewInst->insertAfter(&Instr);
             Instr.replaceAllUsesWith(NewInst);
             return true;
+          }
         }
-      }
       }
     }
   }
