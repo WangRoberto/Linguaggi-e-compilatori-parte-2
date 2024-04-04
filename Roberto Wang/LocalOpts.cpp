@@ -14,7 +14,6 @@
 
 using namespace llvm;
 
-
 bool runOnBasicBlock(BasicBlock &B){
   int cont = 0;
   int nonConstante;
@@ -25,24 +24,107 @@ bool runOnBasicBlock(BasicBlock &B){
     cont ++;
     outs() << "Istruzione n°" <<cont << ":" << Instr<< "\n";
     
-    //First optimization
     if(Instr.getOpcode() == Instruction::Add){
       //outs() << "Addizione:" << "\n";
       for(unsigned int i = 0; i < Instr.getNumOperands(); i++){
         nonConstante = 0;
+
         if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr.getOperand(i))){
-            APInt c = conInt->getValue();
-            if(i == 0){
-            nonConstante = 1;
-            } 
-            if(c.isZero()){
-              
-              Instr.replaceAllUsesWith(Instr.getOperand(nonConstante));
-              //Instr.eraseFromParent();
-              istruzioniDaEliminare.push_back(&Instr);
+          APInt c = conInt->getValue();
           
+          if(i == 0){//Per ottenere l'operando diverso da un immediato
+            nonConstante = 1;
+          } 
+
+          if(c.isZero()){//First Optimization: Algebric Identity           
+            Instr.replaceAllUsesWith(Instr.getOperand(nonConstante));
+            //Instr.eraseFromParent();
+            istruzioniDaEliminare.push_back(&Instr);
+          }
+
+          if(c.isOne()){//Third Optimization: Multi-Instruction Optimization
+            auto tempIter = std::next(Iter, 1);
+            Instruction &Instr2 = *tempIter;
+
+            if(Instr2.getOpcode() == Instruction::Sub){
+              
+              for(unsigned int i = 0; i < Instr2.getNumOperands(); i++){
+                int nonConstante2 = 0;
+        
+                if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr2.getOperand(i))){
+                  APInt c = conInt->getValue();
+
+                  if(i == 0){//Per ottenere l'operando diverso da un immediato
+                    nonConstante2 = 1;
+                  } 
+
+                  if(c.isOne()){
+
+                    //outs()<<"Operando dell'istruzione 1:" << &Instr << "\n";
+                    //outs()<<"Operando dell'istruzione 2:" << Instr2.getOperand(nonConstante2) << "\n";
+
+                    if(Instr2.getOperand(nonConstante2) == &Instr){
+                      
+                      Instr2.replaceAllUsesWith(Instr.getOperand(nonConstante));
+                      istruzioniDaEliminare.push_back(&Instr2);
+                      cont++;
+                      outs() << "Istruzione n°" << cont << ":" << Instr2 << "\n";
+                      Iter = std::next(Iter, 1);
+                    }
+                  }
+                }
+              }
+            }
           }
         }
+      }
+    }
+
+    if(Instr.getOpcode() == Instruction::Sub){
+
+      if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr.getOperand(1))){//Itera gli operandi per vedere se c'è un immediato
+        APInt c = conInt->getValue();
+
+        if(c.isZero()){//First Optimization: Algebric Identity           
+          Instr.replaceAllUsesWith(Instr.getOperand(nonConstante));
+          //Instr.eraseFromParent();
+          istruzioniDaEliminare.push_back(&Instr);
+        } 
+
+        if(c.isOne()){//Third Optimization: Multi-Instruction Optimization
+          auto tempIter = std::next(Iter, 1);
+          Instruction &Instr2 = *tempIter;
+
+          if(Instr2.getOpcode() == Instruction::Add){
+            
+            for(unsigned int i = 0; i < Instr2.getNumOperands(); i++){
+              int nonConstante2 = 0;
+      
+              if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr2.getOperand(i))){
+                APInt c = conInt->getValue();
+
+                if(i == 0){//Per ottenere l'operando diverso da un immediato
+                  nonConstante2 = 1;
+                } 
+
+                if(c.isOne()){
+
+                  //outs()<<"Operando dell'istruzione 1:" << &Instr << "\n";
+                  //outs()<<"Operando dell'istruzione 2:" << Instr2.getOperand(nonConstante2) << "\n";
+
+                  if(Instr2.getOperand(nonConstante2) == &Instr){
+                    
+                    Instr2.replaceAllUsesWith(Instr.getOperand(nonConstante));
+                    cont++;
+                    outs() << "Istruzione n°" << cont << ":" << Instr2 << "\n";
+                    istruzioniDaEliminare.push_back(&Instr2);
+                    Iter = std::next(Iter, 1);
+                  }
+                }
+              }
+            }
+          }
+        }   
       }
     }
 
@@ -66,24 +148,24 @@ bool runOnBasicBlock(BasicBlock &B){
 
     if(Instr.getOpcode() == Instruction::Mul){
       //outs() << "Moltiplicazione:" << "\n";
-      for(unsigned int i = 0; i < Instr.getNumOperands(); i++){//itera gli operandi per vedere se c'è una costante
+      for(unsigned int i = 0; i < Instr.getNumOperands(); i++){//Itera gli operandi per vedere se c'è un immediato
         nonConstante = 0;
         if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr.getOperand(i))){
           APInt c = conInt->getValue();
           
-          if(i == 0){
+          if(i == 0){//Per ottenere l'operando diverso da un immediato
             nonConstante = 1;
           }
 
-          if(c.isOne()){
+          if(c.isOne()){//First Optimization: Algebric Identity
             
             Instr.replaceAllUsesWith(Instr.getOperand(nonConstante));
             //Instr.eraseFromParent();
             istruzioniDaEliminare.push_back(&Instr);
-            
+            break;
           }
-
-          if(c.isPowerOf2()){
+          
+          if(c.isPowerOf2()){//Second Optimization: Strength Reduction
             //unsigned int cont = c.exactLogBase2(); // cambiare con exact
             //Value* op = reinterpret_cast<Value*>(cont);
             Constant *op = ConstantInt::get(conInt->getType(), c.exactLogBase2());
@@ -94,107 +176,106 @@ bool runOnBasicBlock(BasicBlock &B){
             Instr.replaceAllUsesWith(NewInst);
             Iter = std::next(Iter, 1);
             //Instr.eraseFromParent();
-            istruzioniDaEliminare.push_back(&Instr);
+            istruzioniDaEliminare.push_back(&Instr);  
             
           }
-          unsigned int cont = c.nearestLogBase2();
-          //outs() << "Nearest:" << cont << "\n";
-          unsigned int nearestValue = 1 << cont;
-          //outs() << "Nearest Value:" << nearestValue << "\n";
-          unsigned int costanteOriginale = c.getLimitedValue(UINT64_MAX);
-          //outs() << "costanteOriginale:" << costanteOriginale << "\n";
-          
-          if(nearestValue < costanteOriginale){
-            unsigned int dif = costanteOriginale - nearestValue;
-
-            //outs() << "Dif:" << dif << "\n";
-            
-            Constant *op = ConstantInt::get(conInt->getType(), cont);
-            Constant *op2 = ConstantInt::get(conInt->getType(), dif);
-            
-            Instruction *operando1 = BinaryOperator::Create(
-              Instruction::Shl, Instr.getOperand(nonConstante), op);          
-            Instruction *operando2 = BinaryOperator::Create(
-              Instruction::Mul, Instr.getOperand(nonConstante), op2);
-
-            /* BasicBlock* temp = BasicBlock::Create(B.getContext(), "entrypoint");
-            operando1->insertInto(temp, temp->begin());
-            operando2->insertAfter(operando1); */
-
-            Instruction *NewInst = BinaryOperator::Create(
-            Instruction::Sub, operando1, operando2);
-
-            //outs() << "Nuova istruzione:" << NewInst << "\n";
-
-            operando1->insertAfter(&Instr);
-            operando2->insertAfter(operando1);
-            NewInst->insertAfter(operando2);
-            Instr.replaceAllUsesWith(NewInst);
-            Iter = std::next(Iter, 3);
-
-            istruzioniDaEliminare.push_back(&Instr);
-            //istruzioniDaEliminare.push_back(operando1);
-            //istruzioniDaEliminare.push_back(operando2);
-            //Instr.eraseFromParent();
-            //operando1->eraseFromParent();
-            //operando2->eraseFromParent();
-            
-          }     
           else{
-            unsigned int dif = nearestValue - costanteOriginale ;
+            unsigned int cont = c.nearestLogBase2();
+            //outs() << "Nearest:" << cont << "\n";
+            unsigned int nearestValue = 1 << cont;
+            //outs() << "Nearest Value:" << nearestValue << "\n";
+            unsigned int costanteOriginale = c.getLimitedValue(UINT64_MAX);
+            //outs() << "costanteOriginale:" << costanteOriginale << "\n";
+            if(nearestValue < costanteOriginale){
+              unsigned int dif = costanteOriginale - nearestValue;
 
-            //outs() << "Dif:" << dif << "\n";
+              //outs() << "Dif:" << dif << "\n";
+              
+              Constant *op = ConstantInt::get(conInt->getType(), cont);
+              Constant *op2 = ConstantInt::get(conInt->getType(), dif);
+              
+              Instruction *operando1 = BinaryOperator::Create(
+                Instruction::Shl, Instr.getOperand(nonConstante), op);          
+              Instruction *operando2 = BinaryOperator::Create(
+                Instruction::Mul, Instr.getOperand(nonConstante), op2);
+
+              /* BasicBlock* temp = BasicBlock::Create(B.getContext(), "entrypoint");
+              operando1->insertInto(temp, temp->begin());
+              operando2->insertAfter(operando1); */
+
+              Instruction *NewInst = BinaryOperator::Create(
+              Instruction::Add, operando1, operando2);
+
+              //outs() << "Nuova istruzione:" << NewInst << "\n";
+
+              operando1->insertAfter(&Instr);
+              operando2->insertAfter(operando1);
+              NewInst->insertAfter(operando2);
+              Instr.replaceAllUsesWith(NewInst);
+              Iter = std::next(Iter, 3);
+
+              istruzioniDaEliminare.push_back(&Instr);
+              //istruzioniDaEliminare.push_back(operando1);
+              //istruzioniDaEliminare.push_back(operando2);
+              //Instr.eraseFromParent();
+              //operando1->eraseFromParent();
+              //operando2->eraseFromParent();
             
-            Constant *op = ConstantInt::get(conInt->getType(), cont);
-            Constant *op2 = ConstantInt::get(conInt->getType(), dif);
+            }     
+            else{
+              unsigned int dif = nearestValue - costanteOriginale ;
 
-            Instruction *operando1 = BinaryOperator::Create(
-              Instruction::Shl, Instr.getOperand(nonConstante), op);          
-            Instruction *operando2 = BinaryOperator::Create(
-              Instruction::Mul, Instr.getOperand(nonConstante), op2);
+              //outs() << "Dif:" << dif << "\n";
+              
+              Constant *op = ConstantInt::get(conInt->getType(), cont);
+              Constant *op2 = ConstantInt::get(conInt->getType(), dif);
 
-            /* BasicBlock* temp = BasicBlock::Create(B.getContext(), "entrypoint");
-            operando1->insertInto(temp, temp->begin());
-            operando2->insertAfter(operando1); */
-          
-            Instruction *NewInst = BinaryOperator::Create(
-            Instruction::Add, operando1, operando2);
+              Instruction *operando1 = BinaryOperator::Create(
+                Instruction::Shl, Instr.getOperand(nonConstante), op);          
+              Instruction *operando2 = BinaryOperator::Create(
+                Instruction::Mul, Instr.getOperand(nonConstante), op2);
 
-            //outs() << "Nuova istruzione:" << "\n";
+              /* BasicBlock* temp = BasicBlock::Create(B.getContext(), "entrypoint");
+              operando1->insertInto(temp, temp->begin());
+              operando2->insertAfter(operando1); */
+            
+              Instruction *NewInst = BinaryOperator::Create(
+              Instruction::Sub, operando1, operando2);
 
-            operando1->insertAfter(&Instr);
-            operando2->insertAfter(operando1);
-            NewInst->insertAfter(operando2);
-            Instr.replaceAllUsesWith(NewInst);
-            Iter = std::next(Iter, 3);
-            //Instr.eraseFromParent();
-            //operando1->eraseFromParent();
-            //operando2->eraseFromParent();
+              //outs() << "Nuova istruzione:" << "\n";
 
-            istruzioniDaEliminare.push_back(&Instr);
-            //istruzioniDaEliminare.push_back(operando1);
-            //istruzioniDaEliminare.push_back(operando2);
+              operando1->insertAfter(&Instr);
+              operando2->insertAfter(operando1);
+              NewInst->insertAfter(operando2);
+              Instr.replaceAllUsesWith(NewInst);
+              Iter = std::next(Iter, 3);
+              //Instr.eraseFromParent();
+              //operando1->eraseFromParent();
+              //operando2->eraseFromParent();
+
+              istruzioniDaEliminare.push_back(&Instr);
+              //istruzioniDaEliminare.push_back(operando1);
+              //istruzioniDaEliminare.push_back(operando2);
+            }
           }
         }      
       }
     }
 
-    //outs() << Instr.isIntDivRem() << "\n";
-
-    if(Instr.isIntDivRem()){
+    if(Instr.getOpcode() == Instruction::SDiv){
       //outs() << "Ci sono!" << "\n";
       if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr.getOperand(1))){
         APInt c = conInt->getValue();
         //outs() << "Vi è l'immediato nell'istruzione:" << "\n";
-        if(c.isOne()){
+        if(c.isOne()){//First Optimization: Algebric Identity
           //outs() << "Elimino:" << "\n";
-
           Instr.replaceAllUsesWith(Instr.getOperand(0));
-          
+          istruzioniDaEliminare.push_back(&Instr);      
           //Instr.eraseFromParent();
           
         }
-        if(c.isPowerOf2()){
+        else{
+          if(c.isPowerOf2()){//Second Optimization: Strength Reduction
             //unsigned int cont = c.exactLogBase2(); // cambiare con exact
             //Value* op = reinterpret_cast<Value*>(cont);
             Constant *op = ConstantInt::get(conInt->getType(), c.exactLogBase2());
@@ -205,9 +286,8 @@ bool runOnBasicBlock(BasicBlock &B){
             Iter = std::next(Iter, 1);
             //Instr.eraseFromParent();
             istruzioniDaEliminare.push_back(&Instr);
-
-            
           }
+        }
       }
     }
   }
@@ -292,8 +372,7 @@ bool runOnFunction(Function &F) {
 }
 
 
-PreservedAnalyses LocalOpts::run(Module &M,
-                                      ModuleAnalysisManager &AM) {
+PreservedAnalyses LocalOpts::run(Module &M, ModuleAnalysisManager &AM) {
 
   for (auto Fiter = M.begin(); Fiter != M.end(); ++Fiter)
     if (runOnFunction(*Fiter))
