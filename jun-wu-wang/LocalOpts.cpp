@@ -40,13 +40,13 @@ bool optimizeAdd(BinaryOperator &BinaryI) {
       continue;
     }
 
-    // Check if the second operand of the sub instruction is an immediate
+    // Check if the second operand of the Sub Instruction is an immediate
     ConstantInt *OperandImmediate = dyn_cast<ConstantInt>(BinaryOperand->getOperand(1));
     if (!OperandImmediate) {
       continue;
     }
 
-    // Check if the value of the immediate of the instruction and the immediate of the Sub Instruction match
+    // Check if the value of the immediate of the Instruction and the immediate of the Sub Instruction match
     APInt OperandImmediateValue = OperandImmediate->getValue();
     APInt ImmediateValue = Immediate->getValue();
     if (OperandImmediateValue != ImmediateValue) {
@@ -190,7 +190,7 @@ bool optimizeMul(BinaryOperator &BinaryI) {
         continue;
       }
   
-      // Check if it is power of 2 or "almost" power of 2
+      // Check if it is power of 2 or "almost" power of 2 (absolute difference <= 1)
       APInt ImmediateValue = Immediate->getValue();
       ImmediateValue += (diff-1);
       if (!ImmediateValue.isPowerOf2()) {
@@ -283,11 +283,11 @@ bool runOnBasicBlockAlgebraicIdentity(BasicBlock &B) {
       continue;
     }
     
-    // Check if the instruction is an add or a mul
+    // Check if the instruction is an add, sub, mul or sdiv
     int32_t Identity;
-    if (BinaryI->getOpcode() == Instruction::Add) {
+    if (BinaryI->getOpcode() == Instruction::Add || BinaryI->getOpcode() == Instruction::Sub) {
       Identity = 0;
-    } else if (BinaryI->getOpcode() == Instruction::Mul) {
+    } else if (BinaryI->getOpcode() == Instruction::Mul || BinaryI->getOpcode() == Instruction::SDiv) {
       Identity = 1;
     } else {
       continue;
@@ -295,9 +295,26 @@ bool runOnBasicBlockAlgebraicIdentity(BasicBlock &B) {
 
     // Check if it is an algebraic identity
     Value *Val = nullptr;
-    for (unsigned i = 0; i < BinaryI->getNumOperands(); ++i) {
+    if (BinaryI->getOpcode() == Instruction::Add || BinaryI->getOpcode() == Instruction::Mul) {
+      for (unsigned i = 0; i < BinaryI->getNumOperands(); ++i) {
+        // Check if operand is an immediate
+        ConstantInt *Immediate = dyn_cast<ConstantInt>(BinaryI->getOperand(i));
+        if (!Immediate) {
+          continue;
+        }
+  
+        // Check if immediate is an identity
+        APInt ImmediateValue = Immediate->getValue();
+        if (ImmediateValue != Identity) {
+          continue;
+        }
+  
+        Val = BinaryI->getOperand((i+1)%(BinaryI->getNumOperands()));
+        break;
+      }
+    } else { // sub and sdiv case
       // Check if operand is an immediate
-      ConstantInt *Immediate = dyn_cast<ConstantInt>(BinaryI->getOperand(i));
+      ConstantInt *Immediate = dyn_cast<ConstantInt>(BinaryI->getOperand(1));
       if (!Immediate) {
         continue;
       }
@@ -308,8 +325,7 @@ bool runOnBasicBlockAlgebraicIdentity(BasicBlock &B) {
         continue;
       }
 
-      Val = BinaryI->getOperand((i+1)%(BinaryI->getNumOperands()));
-      break;
+      Val = BinaryI->getOperand(0);
     }
       
     if (!Val) {
