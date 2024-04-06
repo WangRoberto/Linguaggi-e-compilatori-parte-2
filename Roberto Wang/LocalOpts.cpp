@@ -14,13 +14,6 @@
 
 using namespace llvm;
 
-/*
-Domanda 1: Come mai non funziona con Value quando provo a creare una nuova istruzione? 
-Domanda 2: Come mai i registri sono uguali quando devo cancellarli? Perché cancello un'istruzionoe, quello subito successivo prende il suo posto
-Domanda 3: Devo aggiungere più istruzioni nel caso del Strength Reduction? Sì
-Fix 1: Si deve considerare il secondo operando nella terza ottimizzazione V
-*/
-
 bool runOnBasicBlock(BasicBlock &B){
   int cont = 0;
   int nonConstante;
@@ -173,10 +166,40 @@ bool runOnBasicBlock(BasicBlock &B){
       for(unsigned int i = 0; i < Instr.getNumOperands(); i++){//Itera gli operandi per vedere se c'è un immediato
         nonConstante = 0;
         if(ConstantInt* conInt = dyn_cast<ConstantInt>(Instr.getOperand(i))){
+          
           APInt c = conInt->getValue();
           
           if(i == 0){//Per ottenere l'operando diverso da un immediato
             nonConstante = 1;
+          }
+
+          if(ConstantInt* conInt2 = dyn_cast<ConstantInt>(Instr.getOperand(nonConstante))){
+            APInt c2 = conInt2->getValue();
+            if(c2.isOne()){//First Optimization: Algebric Identity
+              
+              /*outs() << "Valore 1:" << c.getZExtValue() << "\n";
+              outs() << "Valore 2:" << c2.getZExtValue() << "\n";*/
+
+              Instr.replaceAllUsesWith(Instr.getOperand(i));
+
+              //Instr.eraseFromParent();
+              istruzioniDaEliminare.push_back(&Instr);
+              break;
+            }
+
+            if(c.isOne()){//First Optimization: Algebric Identity
+              
+              /*outs() << "Valore 1:" << c.getZExtValue() << "\n";
+              outs() << "Valore 2:" << c2.getZExtValue() << "\n";*/
+
+              Instr.replaceAllUsesWith(Instr.getOperand(nonConstante));
+        
+              //Instr.eraseFromParent();
+              istruzioniDaEliminare.push_back(&Instr);
+              break;
+            }
+            
+            break;
           }
 
           if(c.isOne()){//First Optimization: Algebric Identity
