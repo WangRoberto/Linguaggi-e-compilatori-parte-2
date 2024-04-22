@@ -24,6 +24,6 @@ Ogni componente del gruppo ha svolto l'assignment a modo suo per poi avere una p
 ### File da consegnare
 - Documento PDF
   1. Formalizzazione per il framework di Dataflow Analysis 
-  2. Tabella di iterazioni
+  2. Tabella di iterazioni dell'algoritmo iterativo di soluzione del problema
 
 ### Scadenza: entro 6 maggio 2024
