@@ -1,7 +1,7 @@
 # Linguaggi-e-compilatori-parte-2
 
 ## Descrizione
-Ogni componente del gruppo ha svolto l'assignment a modo suo per poi avere una proposta collettiva (Primo Assignment).
+- Assignment 1: ogni componente del gruppo ha svolto l'assignment a modo suo per poi avere una proposta collettiva (Primo Assignment).
 
 ## Primo assignment
 1. Algebric Identity
