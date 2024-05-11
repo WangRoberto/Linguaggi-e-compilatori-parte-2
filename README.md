@@ -28,3 +28,19 @@
   2. Tabella di iterazioni dell'algoritmo iterativo di soluzione del problema
 
 ### Scadenza: entro 6 maggio 2024
+
+## Terzo assignment
+1. Calcolare le reaching definitions
+2. Trovare le istruzioni loop-invariant
+3. Calcolare i dominatori (dominance tree)
+4. Trovare le uscite del loop (i successori fuori dal loop)
+5. Le istruzioni candidate alle code motion
+6. Eseguire una ricerca depth-first dei blocchi
+
+### File da consegnare
+- LoopWalk.cpp
+- LoopWalk.h
+- PassRegistry.def
+- Eventuali altri file custom creati o modificati
+
+### Scadenza: ?
