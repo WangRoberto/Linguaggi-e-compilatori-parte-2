@@ -43,4 +43,4 @@
 - PassRegistry.def
 - Eventuali altri file custom creati o modificati
 
-### Scadenza: ?
+### Scadenza: 20 giugno 2024
