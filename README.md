@@ -1,8 +1,8 @@
 # Linguaggi-e-compilatori-parte-2
 
 ## Descrizione
-- Assignment 1: Ogni componente del gruppo ha svolto l'assignment a modo suo per poi avere una proposta collettiva (Primo Assignment).
-- Assignment 2: Elaborato svolto unitariamente su un [foglio Google](./Secondo%20Assignment/Secondo%20Assignment.xlsx) condiviso e formalizzato in un [pdf finale](./Secondo%20Assignment/Secondo%20Assignment.pdf) (Secondo Assignment).
+- Assignment 1: Ogni componente del gruppo ha svolto l'assignment a modo suo per poi avere una proposta collettiva ([Primo Assignment](./Primo%20Assignment/)).
+- Assignment 2: Elaborato svolto unitariamente su un [foglio Google](./Secondo%20Assignment/Secondo%20Assignment.xlsx) condiviso e formalizzato in un [pdf finale](./Secondo%20Assignment/Secondo%20Assignment.pdf) ([Secondo Assignment](./Secondo%20Assignment/)).
 
 ## Primo assignment
 1. Algebric Identity
