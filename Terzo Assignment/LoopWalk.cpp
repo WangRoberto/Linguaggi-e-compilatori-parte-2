@@ -50,10 +50,43 @@ void findLoopInvariantInstructions(Loop const &L, std::vector<Instruction*> &Loo
   }
 }
 
-void findCodeMotionInstructions(Loop const &L, LoopStandardAnalysisResults &AR, std::vector<Instruction*> const &LoopInvariantInstructions, std::vector<Instruction*> &CodeMotionInstructions) {
+bool isDeadOutsideLoop(Loop const &L, Instruction &I) {
+  bool isDead = true;
+  for (auto Iter = I.user_begin(); Iter != I.user_end(); ++Iter) {
+    User *InstUser = *Iter;
+    Instruction *Inst = dyn_cast<Instruction>(InstUser);
+    BasicBlock *BB = Inst->getParent();
+
+    bool isInsideLoop = false;
+    for (Loop::block_iterator BI = L.block_begin(); BI != L.block_end(); ++BI) {
+      if (BB == *BI) {
+        isInsideLoop = true;
+        break;
+      }
+    }
+
+    if (!isInsideLoop) {
+      isDead = false;
+      break;
+    }
+  }
+  return isDead;
+}
+
+bool isDominatorAllExits(Instruction &I, DominatorTree const &DT, SmallVector<BasicBlock*> const &ExitingBlocks) {
+  bool dominatesAllExits = true;
+  for (auto &BB : ExitingBlocks) {
+    if (I.getParent() != BB && !DT.dominates(&I, BB)) {
+      dominatesAllExits = false;
+      break;
+    }
+  }
+  return dominatesAllExits;
+}
+
+void findCodeMotionInstructions(Loop const &L, DominatorTree const &DT, std::vector<Instruction*> const &LoopInvariantInstructions, std::vector<Instruction*> &CodeMotionInstructions) {
   SmallVector<BasicBlock*> ExitingBlocks;
   L.getExitingBlocks(ExitingBlocks);
-  DominatorTree &DT = AR.DT;
 
   for (auto &I : LoopInvariantInstructions) {
     // Check if instruction is dead code
@@ -63,41 +96,13 @@ void findCodeMotionInstructions(Loop const &L, LoopStandardAnalysisResults &AR, 
     }
     
     // Check if instruction is dead outside the loop
-    bool isDead = true;
-    for (auto Iter = I->user_begin(); Iter != I->user_end(); ++Iter) {
-      User *InstUser = *Iter;
-      Instruction *Inst = dyn_cast<Instruction>(InstUser);
-      BasicBlock *BB = Inst->getParent();
-
-      bool isInsideLoop = false;
-      for (Loop::block_iterator BI = L.block_begin(); BI != L.block_end(); ++BI) {
-        if (BB == *BI) {
-          isInsideLoop = true;
-	  break;
-	}
-      }
-
-      if (!isInsideLoop) {
-        isDead = false;
-	break;
-      }
-    }
-
-    if (isDead) {
+    if (isDeadOutsideLoop(L, *I)) {
       CodeMotionInstructions.push_back(I);
       continue;
     }
 
     // If instruction is not dead, check if instruction dominates all exits
-    bool dominatesAllExits = true;
-    for (auto &BB : ExitingBlocks) {
-      if (I->getParent() != BB && !DT.dominates(I, BB)) {
-	dominatesAllExits = false;
-        break;
-      }
-    }
-
-    if (dominatesAllExits) {
+    if (isDominatorAllExits(*I, DT, ExitingBlocks)) {
       CodeMotionInstructions.push_back(I);
     }
   }
@@ -125,7 +130,8 @@ PreservedAnalyses LoopWalk::run(Loop &L, LoopAnalysisManager &AM, LoopStandardAn
 
   outs() << "\n---------- CODE MOTION CANDIDATE INSTRUCTIONS ----------\n\n";
   std::vector<Instruction*> CodeMotionInstructions;
-  findCodeMotionInstructions(L, AR, LoopInvariantInstructions, CodeMotionInstructions);
+  DominatorTree &DT = AR.DT;
+  findCodeMotionInstructions(L, DT, LoopInvariantInstructions, CodeMotionInstructions);
   for (auto &I : CodeMotionInstructions) {
     outs() << *I << "\n";
   }
