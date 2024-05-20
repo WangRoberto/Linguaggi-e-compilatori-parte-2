@@ -51,12 +51,14 @@ void findLoopInvariantInstructions(std::vector<Instruction*> &LoopInvariantInstr
 }
 
 bool isDeadOutsideLoop(Instruction &I, Loop const &L) {
+  // For each use of the instruction
   bool isDead = true;
   for (auto Iter = I.user_begin(); Iter != I.user_end(); ++Iter) {
     User *InstUser = *Iter;
     Instruction *Inst = dyn_cast<Instruction>(InstUser);
     BasicBlock *BB = Inst->getParent();
 
+    // Check if use is inside the loop
     bool isInsideLoop = false;
     for (Loop::block_iterator BI = L.block_begin(); BI != L.block_end(); ++BI) {
       if (BB == *BI) {
@@ -108,6 +110,29 @@ void findCodeMotionInstructions(std::vector<Instruction*> &CodeMotionInstruction
   }
 }
 
+bool isMovable(Instruction &I, std::vector<Instruction*> const &LoopInvariantInstructions, BasicBlock *Preheader) {
+  bool isMovable = true;
+  for (auto Iter = I.op_begin(); Iter != I.op_end(); ++Iter) {
+    Value *Operand = *Iter;
+    Instruction *Def = dyn_cast<Instruction>(Operand);
+
+    // Check if operand reaching definition is not a loop-invariant instruction of the loop
+    if (!Def || std::find(LoopInvariantInstructions.begin(), LoopInvariantInstructions.end(), Def) == LoopInvariantInstructions.end()) {
+      continue;
+    }
+
+    // Check if operand reaching definition is in the preheader
+    BasicBlock *BB = Def->getParent();
+    if (BB == Preheader) {
+      continue;
+    }
+
+    isMovable = false;
+    break;
+  }
+  return isMovable;
+}
+
 PreservedAnalyses LoopWalk::run(Loop &L, LoopAnalysisManager &AM, LoopStandardAnalysisResults &AR, LPMUpdater &U) {
   outs() << "\n---------- PROGRAM CFG ----------\n";
   BasicBlock *Head = L.getHeader();
@@ -141,6 +166,10 @@ PreservedAnalyses LoopWalk::run(Loop &L, LoopAnalysisManager &AM, LoopStandardAn
   Instruction &PreheaderLastI = *(Preheader->rbegin());
   bool Transformed = false;
   for (auto &I : CodeMotionInstructions) {
+    if (!isMovable(*I, LoopInvariantInstructions, Preheader)) {
+      continue;
+    }
+
     Transformed = true;
     I->moveBefore(&PreheaderLastI);
   }
