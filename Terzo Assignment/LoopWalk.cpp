@@ -73,7 +73,7 @@ bool isDeadOutsideLoop(Instruction &I, Loop const &L) {
   return isDead;
 }
 
-bool isDominatorAllExits(Instruction &I, SmallVector<BasicBlock*> const &ExitingBlocks, DominatorTree const &DT) {
+bool isDominatorOfAllExits(Instruction &I, SmallVector<BasicBlock*> const &ExitingBlocks, DominatorTree const &DT) {
   bool dominatesAllExits = true;
   for (auto &BB : ExitingBlocks) {
     if (I.getParent() != BB && !DT.dominates(&I, BB)) {
@@ -102,7 +102,7 @@ void findCodeMotionInstructions(std::vector<Instruction*> &CodeMotionInstruction
     }
 
     // If instruction is not dead, check if instruction dominates all exits
-    if (isDominatorAllExits(*I, ExitingBlocks, DT)) {
+    if (isDominatorOfAllExits(*I, ExitingBlocks, DT)) {
       CodeMotionInstructions.push_back(I);
     }
   }
