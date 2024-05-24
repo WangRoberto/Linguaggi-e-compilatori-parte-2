@@ -178,7 +178,7 @@ PreservedAnalyses LoopWalk::run(Loop &L, LoopAnalysisManager &AM, LoopStandardAn
     outs() << BB;
   }
 
-  if (!Transformed) {
+  if (Transformed) {
     return PreservedAnalyses::none();
   }
   return PreservedAnalyses::all();
