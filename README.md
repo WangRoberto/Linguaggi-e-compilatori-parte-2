@@ -45,3 +45,17 @@
 - Eventuali altri file custom creati o modificati
 
 ### Scadenza: 20 maggio 2024
+
+## Quarto assignment
+1. Lj and Lk must be adjacent
+2. Lj and Lk must iterate the same number of times
+3. Lj and Lk must be control flow equivalent
+4. There cannot be any negative distance dependencies between Lj and Lk 
+
+### File da consegnare
+- LoopFusionPass.cpp
+- LoopFusionPass.h
+- PassRegistry.def
+- Eventuali altri file custom creati o modificati
+
+### Scadenza: ?
