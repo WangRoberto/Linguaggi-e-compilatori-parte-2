@@ -30,62 +30,65 @@ void myPrintLoop(Loop & loop, int cont){
   }
 }
 
-BasicBlock * checkLoopAdiacenti(BasicBlock * successoreLoop1, BasicBlock * BBloop2){
+/*Bool*/
+
+void checkLoopAdiacenti(BasicBlock * successoreLoop1, BasicBlock * BBloop2){
   if(successoreLoop1 == BBloop2){
     outs() << "\n -------- Loop Adiecenti -------- \n";
+    return;
   }
-  else{
-    outs() << "\n -------- Loop non Adiacenti -------- \n";
-  }
-  return BBloop2;
+  outs() << "\n -------- Loop non Adiacenti -------- \n";
 }
 
 BasicBlock * topLoopBB(Loop & loop, BasicBlock * exitBlock){
-  BasicBlock * BBTop;
   if(loop.isGuarded()){
     outs() << "\n -------- Loop è Guarded --------- \n";
-    BasicBlock * BBGuard = loop.getLoopGuardBranch()->getParent();
-    BBTop = checkLoopAdiacenti(exitBlock, BBGuard);
+    return loop.getLoopGuardBranch()->getParent();
+    //BBTop = checkLoopAdiacenti(exitBlock, BBGuard);
   }
-  else{
-    outs() << "\n -------- Loop Unguarded -------- \n";
-    BasicBlock * BBPreHeader = loop.getLoopPreheader();
-    BBTop = checkLoopAdiacenti(exitBlock, BBPreHeader);
-  }
-  return BBTop;
+  
+  outs() << "\n -------- Loop Unguarded -------- \n";
+  //BBTop = checkLoopAdiacenti(exitBlock, BBPreHeader);
+  return loop.getLoopPreheader();
+  
+  //return BBTop;
 }
 
-void checkLoopControlFlowEquivalenti(DominatorTree & DT, PostDominatorTree & PDT, BasicBlock * BBTop, BasicBlock * BBPreHeaderPrecedente, BasicBlock * exitBlock, int cont){
-  bool isDominated = false;
+/*Bool + Elimina i FOR*/
 
-  if(BBPreHeaderPrecedente){
-    for(auto & I : *BBPreHeaderPrecedente){
-      if(DT.dominates(&I, BBTop)){
+void checkLoopControlFlowEquivalenti(DominatorTree & DT, PostDominatorTree & PDT, BasicBlock * BBTopL1, BasicBlock * BBTopL0, BasicBlock * exitBlock, int cont){
+  bool isDominated = false;
+  bool isPostDominated = false;
+
+  if(BBTopL0){
+    for(auto & I : *BBTopL0){
+      if(DT.dominates(&I, BBTopL1)){
         isDominated = true;
         break;
       }
     }
-  }
 
-  bool isPostDominated = false;
+    
   
-  for(auto & I: *BBTop){
-    if(exitBlock){
-      for(auto & I2: *exitBlock){
-        if(PDT.dominates(&I, &I2)){
-          isPostDominated = true;
-          break;
+    for(auto & I: *BBTopL1){
+        for(auto & I2: *BBTopL0){
+          if(PDT.dominates(&I, &I2)){
+            isPostDominated = true;
+            break;
+          }
         }
-      }
+
+    }
+
+    outs() << "\n L0 domina L1? " << (isDominated? "True\n" : "False\n");
+    outs() << "\n L1 postdomina L0? " << (isPostDominated? "True\n" : "False\n");
+
+    if(isDominated && isPostDominated){
+      outs() << "\n -------- Loop n°" << (cont - 1) << " e Loop n°" << cont << " sono control flow equivalenti -------- \n";
     }
   }
 
-  outs() << "\n L0 domina L1? " << (isDominated? "True\n" : "False\n");
-  outs() << "\n L1 postdomina L0? " << (isPostDominated? "True\n" : "False\n");
-
-  if(isDominated && isPostDominated){
-    outs() << "\n -------- Loop n°" << (cont - 1) << " e Loop n°" << cont << " sono control flow equivalenti -------- \n";
-  }
+  
 }
 
 PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) {
@@ -98,7 +101,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
 
   //SmallVector <BasicBlock *> exitingBlocks;
   
-  BasicBlock * BBPreHeaderPrecedente = NULL;
+  BasicBlock * BBTopL0 = NULL;
   BasicBlock * exitBlock = NULL;
   //BasicBlock * exitingBlock = NULL;
 
@@ -112,17 +115,18 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
     /*Punto 1: si assume che ci sia solo un successore, ovvero un solo
     exitBlock*/
 
-    BasicBlock * BBTop = topLoopBB(loop, exitBlock);
+    BasicBlock * BBTopL1 = topLoopBB(loop, exitBlock);
+    checkLoopAdiacenti(exitBlock, BBTopL1);
 
     /*Punto 3: si assume che ci sia solo un successore, ovvero un solo
     exitBlock*/
 
-    checkLoopControlFlowEquivalenti(DT, PDT, BBTop, BBPreHeaderPrecedente, exitBlock, cont);
+    checkLoopControlFlowEquivalenti(DT, PDT, BBTopL1, BBTopL0, exitBlock, cont);
     
     /*Variabili si aggiornano solo al termine di una iterazione, 
     in modo tale da contenere le informazioni della iterazione precedente*/
 
-    BBPreHeaderPrecedente = loop.getLoopPreheader();
+    BBTopL0 = topLoopBB(loop, exitBlock);
     //exitingBlock = loop.getExitingBlock();
     exitBlock = loop.getExitBlock();
     
