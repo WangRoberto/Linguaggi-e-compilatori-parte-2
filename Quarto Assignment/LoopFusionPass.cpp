@@ -1,4 +1,4 @@
-//===-- LocalOpts.cpp - Example Transformations --------------------------===//
+//===-- LoopFusionPass.cpp - Example Transformations --------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -20,10 +20,11 @@ using namespace llvm;
 /*Stampa:
 1. Il numero di Loop
 2. Il PreHeader
-3. Blocchi del Loop*/
+3. Blocchi del Loop
+4. Successore del Loop(Exit Block)*/
 
 void myPrintLoop(Loop & loop, int cont){
-  outs() << "\n ------------------------ Loop n°" << cont << " ------------------------ \n";
+  outs() << "\n ------------------------ Loop L" << cont << " ------------------------ \n";
   outs() << "\n" << loop << "\n -------- PreHeader -------- \n";
   
   //outs() << loop << "\n";
@@ -52,11 +53,11 @@ bool checkLoopAdiacenti(BasicBlock * successoreLoop0, BasicBlock * BBTopL1){
 
 BasicBlock * topLoopBB(Loop & loop, BasicBlock * exitBlock){
   if(loop.isGuarded()){
-    //outs() << "\n -------- Loop è Guarded --------- \n";
+    outs() << "\n -------- Loop è Guarded --------- \n";
     return loop.getLoopGuardBranch()->getParent();
   }
   
-  //outs() << "\n -------- Loop Unguarded -------- \n";
+  outs() << "\n -------- Loop Unguarded -------- \n";
   return loop.getLoopPreheader();
 }
 
@@ -80,8 +81,8 @@ bool checkLoopControlFlowEquivalent(DominatorTree & DT, PostDominatorTree & PDT,
       isPostDominated = true;
     }
 
-    outs() << "\n L0 domina L1? " << (isDominated? "True\n" : "False\n");
-    outs() << "\n L1 postdomina L0? " << (isPostDominated? "True\n" : "False\n");
+    outs() << "\n L0 Domina L1? " << (isDominated? "True\n" : "False\n");
+    outs() << "\n L1 PostDomina L0? " << (isPostDominated? "True\n" : "False\n");
   }
 
   return isDominated & isPostDominated;
@@ -93,7 +94,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
   DominatorTree & DT = AM.getResult<DominatorTreeAnalysis>(F);
   PostDominatorTree & PDT = AM.getResult<PostDominatorTreeAnalysis>(F);
 
-  int cont = 1; //Numera i loop
+  int cont = 0; //Numera i loop
 
   //SmallVector <BasicBlock *> exitingBlocks;
   
@@ -104,7 +105,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
   for(auto L = LI.rbegin(); L != LI.rend(); ++L){
     Loop &loop = **L;
     
-    /*Stampa dei blocchi del Loop*/
+    /*Stampa informazioni inerenti al Loop*/
 
     myPrintLoop(loop, cont);
     
@@ -114,7 +115,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
     BasicBlock * BBTopL1 = topLoopBB(loop, exitBlock);
     bool isLoopAdiacenti = checkLoopAdiacenti(exitBlock, BBTopL1);
     if(isLoopAdiacenti){
-      outs() << "\n -------- Loop Adiecenti -------- \n";
+      outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " sono Adiacenti -------- \n";
       //outs() << *exitBlock;
       //outs() << *BBTopL1;
     }
@@ -125,13 +126,14 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
     bool isLoopControlFlowEquivalent = checkLoopControlFlowEquivalent(DT, PDT, BBTopL1, BBTopL0, exitBlock, cont);
     
     if(isLoopControlFlowEquivalent){
-      outs() << "\n -------- Loop n°" << (cont - 1) << " e Loop n°" << cont << " sono control flow equivalenti -------- \n";
+      outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " sono Control Flow Equivalenti -------- \n";
     }
 
     /*Variabili si aggiornano solo al termine di una iterazione, 
     in modo tale da contenere le informazioni della iterazione precedente*/
 
-    BBTopL0 = topLoopBB(loop, exitBlock);
+    //BBTopL0 = topLoopBB(loop, exitBlock);
+    BBTopL0 = BBTopL1;
     exitBlock = loop.getExitBlock();
     //exitingBlock = loop.getExitingBlock();
     
