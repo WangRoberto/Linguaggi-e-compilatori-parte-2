@@ -96,23 +96,28 @@ bool checkLoopTripCount(int TC0, int TC1){
   return false;
 }
 
+/*Controlla se ci sono istruzioni di L1 che dipendono da L0*/
 bool checkDependence(Loop * L0, Loop & L1, DependenceInfo & DI){
   int cont = 0;
   bool check = false;
+
   if(L0){
-    
     for(auto B0 = L0->block_begin(); B0 != L0->block_end(); ++B0){
       BasicBlock & BB0 = **B0;
       for(auto I0 = BB0.begin(); I0 != BB0.end(); ++I0){
         Instruction & Instr0 = *I0;
+        outs() << "\n -------------------------------- \n Istruzione L0: " << Instr0 << "\n -------------------------------- \n";
         for(auto B1 = L1.block_begin(); B1 != L1.block_end(); ++B1){
           BasicBlock & BB1 = **B1;
           for(auto I1 = BB1.begin(); I1 != BB1.end(); ++I1){
             Instruction & Instr1 = *I1;
+            outs() << "\n Istruzione L1: " << Instr1 << "\n";
             auto dep = DI.depends(&Instr0, &Instr1, true);
             if(dep){
+              outs() << "\n -------- Dipendenze -------- \n";
               outs() << "\n Istruzione L0: " << Instr0 << "\n";
               outs() << "\n Istruzione L1: " << Instr1 << "\n";
+              outs() << "\n -------------------------------- \n";
               cont++;
               check = true;
             }        
@@ -121,6 +126,7 @@ bool checkDependence(Loop * L0, Loop & L1, DependenceInfo & DI){
       }
     }
   }
+
   outs() << "\n Numero di dipendenze:" << cont << "\n";
   return check;
 }
