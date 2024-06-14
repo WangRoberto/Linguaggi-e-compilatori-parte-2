@@ -88,6 +88,7 @@ bool checkLoopControlFlowEquivalent(DominatorTree & DT, PostDominatorTree & PDT,
   return isDominated & isPostDominated;
 }
 
+/*Controlla che il Trip Count di L0 e L1 siano uguali*/
 bool checkLoopTripCount(int TC0, int TC1){
   if(TC0 == TC1){
     return true;
@@ -95,13 +96,44 @@ bool checkLoopTripCount(int TC0, int TC1){
   return false;
 }
 
+bool checkDependence(Loop * L0, Loop & L1, DependenceInfo & DI){
+  int cont = 0;
+  bool check = false;
+  if(L0){
+    
+    for(auto B0 = L0->block_begin(); B0 != L0->block_end(); ++B0){
+      BasicBlock & BB0 = **B0;
+      for(auto I0 = BB0.begin(); I0 != BB0.end(); ++I0){
+        Instruction & Instr0 = *I0;
+        for(auto B1 = L1.block_begin(); B1 != L1.block_end(); ++B1){
+          BasicBlock & BB1 = **B1;
+          for(auto I1 = BB1.begin(); I1 != BB1.end(); ++I1){
+            Instruction & Instr1 = *I1;
+            auto dep = DI.depends(&Instr0, &Instr1, true);
+            if(dep){
+              outs() << "\n Istruzione L0: " << Instr0 << "\n";
+              outs() << "\n Istruzione L1: " << Instr1 << "\n";
+              cont++;
+              check = true;
+            }        
+          }
+        }
+      }
+    }
+  }
+  outs() << "\n Numero di dipendenze:" << cont << "\n";
+  return check;
+}
+
 PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) {
 
-  LoopInfo & LI = AM.getResult<LoopAnalysis>(F);
-  DominatorTree & DT = AM.getResult<DominatorTreeAnalysis>(F);
-  PostDominatorTree & PDT = AM.getResult<PostDominatorTreeAnalysis>(F);
+  LoopInfo &LI = AM.getResult<LoopAnalysis>(F);
+  DominatorTree &DT = AM.getResult<DominatorTreeAnalysis>(F);
+  PostDominatorTree &PDT = AM.getResult<PostDominatorTreeAnalysis>(F);
 
-  ScalarEvolution & SE = AM.getResult<ScalarEvolutionAnalysis>(F);
+  ScalarEvolution &SE = AM.getResult<ScalarEvolutionAnalysis>(F);
+
+  DependenceInfo &DI = AM.getResult<DependenceAnalysis>(F);
 
   int cont = 0; //Numera i loop
 
@@ -110,6 +142,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
   BasicBlock * BBTopL0 = NULL;
   BasicBlock * exitBlock = NULL;
   int TC0 = -1;
+  Loop * L0 = NULL;
   
   //BasicBlock * exitingBlock = NULL;
 
@@ -140,7 +173,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
       outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " sono Control Flow Equivalenti -------- \n";
     }
 
-    /*Punto 2*/
+    /*Punto 2: si assume che i cicli FOR abbiano un numero costante di cicli e non N*/
     //exitingBlock = loop.getExitingBlock();
     int TC1 = SE.getSmallConstantTripCount(&loop);
     outs() << "\n -------- Loop Trip Count: " << TC1 << " --------- \n";
@@ -148,6 +181,12 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
       outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " hanno lo stesso Trip Count (" << TC0 << ") -------- \n";
     }
     TC0 = TC1;
+
+    /*Punto 4*/
+    if(checkDependence(L0, loop, DI)){
+      outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " hanno delle istruzioni che dipendono tra di loro -------- \n";
+    }
+    L0 = &loop;
   
     /*Variabili si aggiornano solo al termine di una iterazione, 
     in modo tale da contenere le informazioni della iterazione precedente*/
