@@ -88,11 +88,20 @@ bool checkLoopControlFlowEquivalent(DominatorTree & DT, PostDominatorTree & PDT,
   return isDominated & isPostDominated;
 }
 
+bool checkLoopTripCount(int TC0, int TC1){
+  if(TC0 == TC1){
+    return true;
+  }
+  return false;
+}
+
 PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) {
 
-  LoopInfo &LI = AM.getResult<LoopAnalysis>(F);
+  LoopInfo & LI = AM.getResult<LoopAnalysis>(F);
   DominatorTree & DT = AM.getResult<DominatorTreeAnalysis>(F);
   PostDominatorTree & PDT = AM.getResult<PostDominatorTreeAnalysis>(F);
+
+  ScalarEvolution & SE = AM.getResult<ScalarEvolutionAnalysis>(F);
 
   int cont = 0; //Numera i loop
 
@@ -100,10 +109,12 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
   
   BasicBlock * BBTopL0 = NULL;
   BasicBlock * exitBlock = NULL;
+  int TC0 = -1;
+  
   //BasicBlock * exitingBlock = NULL;
 
   for(auto L = LI.rbegin(); L != LI.rend(); ++L){
-    Loop &loop = **L;
+    Loop & loop = **L;
     
     /*Stampa informazioni inerenti al Loop*/
 
@@ -129,6 +140,15 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
       outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " sono Control Flow Equivalenti -------- \n";
     }
 
+    /*Punto 2*/
+    //exitingBlock = loop.getExitingBlock();
+    int TC1 = SE.getSmallConstantTripCount(&loop);
+    outs() << "\n -------- Loop Trip Count: " << TC1 << " --------- \n";
+    if(checkLoopTripCount(TC0, TC1)){
+      outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " hanno lo stesso Trip Count (" << TC0 << ") -------- \n";
+    }
+    TC0 = TC1;
+  
     /*Variabili si aggiornano solo al termine di una iterazione, 
     in modo tale da contenere le informazioni della iterazione precedente*/
 
@@ -142,7 +162,9 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
     //exitingBlocks.clear();
     //loop.getExitingBlocks(exitingBlocks);
   }
-  
+
+  outs() << "\n";
+
   /*for (auto Fiter = M.begin(); Fiter != M.end(); ++Fiter)
     if (runOnFunction(*Fiter))
       return PreservedAnalyses::none();
