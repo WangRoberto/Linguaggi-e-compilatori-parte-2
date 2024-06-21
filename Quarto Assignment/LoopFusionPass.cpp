@@ -15,6 +15,10 @@
 #include "llvm/IR/Dominators.h"
 #include "llvm/Analysis/PostDominators.h"
 
+//#include "llvm/Analysis/ScalarEvolutionExpressions.h"
+
+//#include <memory>
+
 using namespace llvm;
 
 /*Stampa:
@@ -23,19 +27,19 @@ using namespace llvm;
 3. Blocchi del Loop
 4. Successore del Loop(Exit Block)*/
 
-void myPrintLoop(Loop & loop, int cont){
+void myPrintLoop(Loop * loop, int cont){
   outs() << "\n ------------------------ Loop L" << cont << " ------------------------ \n";
-  outs() << "\n" << loop << "\n -------- PreHeader -------- \n";
+  outs() << "\n" << *loop << "\n -------- PreHeader -------- \n";
   
   //outs() << loop << "\n";
   //outs() << *(**L).getLoopPreheader() << "\n ---------------- \n";
-  outs() << *loop.getLoopPreheader() << "\n -------- Blocchi del Loop -------- \n";
+  outs() << *loop->getLoopPreheader() << "\n -------- Blocchi del Loop -------- \n";
 
-  for(auto B = loop.block_begin(); B != loop.block_end(); ++B){
+  for(auto B = loop->block_begin(); B != loop->block_end(); ++B){
     outs() << **B;
   }
 
-  outs() << "\n -------- Successore(Exit Block) -------- \n" << *loop.getExitBlock();
+  outs() << "\n -------- Successore(Exit Block) -------- \n" << *loop->getExitBlock();
 
 }
 
@@ -51,14 +55,14 @@ bool checkLoopAdiacenti(BasicBlock * successoreLoop0, BasicBlock * BBTopL1){
 
 /*Si ottiene il BasicBlock della Guardia oppure quello del PreHeader*/
 
-BasicBlock * topLoopBB(Loop & loop, BasicBlock * exitBlock){
-  if(loop.isGuarded()){
+BasicBlock * topLoopBB(Loop * loop, BasicBlock * exitBlock){
+  if(loop->isGuarded()){
     outs() << "\n -------- Loop è Guarded --------- \n";
-    return loop.getLoopGuardBranch()->getParent();
+    return loop->getLoopGuardBranch()->getParent();
   }
   
   outs() << "\n -------- Loop Unguarded -------- \n";
-  return loop.getLoopPreheader();
+  return loop->getLoopPreheader();
 }
 
 /*Controlla se L0 e L1 sono Control Flow Equivalenti:
@@ -97,38 +101,135 @@ bool checkLoopTripCount(int TC0, int TC1){
 }
 
 /*Controlla se ci sono istruzioni di L1 che dipendono da L0*/
-bool checkDependence(Loop * L0, Loop & L1, DependenceInfo & DI){
+bool checkDependence(Loop * L0, Loop * L1, DependenceInfo & DI){
   int cont = 0;
   bool check = false;
 
   if(L0){
     for(auto B0 = L0->block_begin(); B0 != L0->block_end(); ++B0){
       BasicBlock & BB0 = **B0;
+      
       for(auto I0 = BB0.begin(); I0 != BB0.end(); ++I0){
         Instruction & Instr0 = *I0;
         outs() << "\n -------------------------------- \n Istruzione L0: " << Instr0 << "\n -------------------------------- \n";
-        for(auto B1 = L1.block_begin(); B1 != L1.block_end(); ++B1){
+        
+        for(auto B1 = L1->block_begin(); B1 != L1->block_end(); ++B1){
           BasicBlock & BB1 = **B1;
+          
           for(auto I1 = BB1.begin(); I1 != BB1.end(); ++I1){
             Instruction & Instr1 = *I1;
             outs() << "\n Istruzione L1: " << Instr1 << "\n";
             auto dep = DI.depends(&Instr0, &Instr1, true);
+
+            
+            /*if(dep){
+              bool isNegativeDependence = false;
+              for(unsigned i = 1; i <= dep->getLevels(); i++){
+                if(dep->getDirection(i) == Dependence::DVEntry::NEGATIVE){
+                  isNegativeDependence =true;
+                  break;
+                }
+              }
+            }*/
+
+            /*if(!dep){
+              continue;
+            }*/
+
+            /*
             if(dep){
+              outs() << "\n -------- Livello: " << dep->getLevels() << " --------- \n";
+              for(unsigned Level = 0; Level <= dep->getLevels(); ++Level){
+                const SCEV *Distance = dep->getDistance(Level);
+                if(Distance && !isa <SCEVCouldNotCompute> (Distance)){
+                const auto * ConstDist = dyn_cast<SCEVConstant>(Distance);
+                
+                  if(ConstDist && ConstDist->getValue()->isNegative()){
+                    cont ++;
+                    check = true;
+                  } 
+                }
+              }
+            }*/
+            
+            /*
+            if(dep){   
               outs() << "\n -------- Dipendenze -------- \n";
+              dep->dump(outs());
               outs() << "\n Istruzione L0: " << Instr0 << "\n";
               outs() << "\n Istruzione L1: " << Instr1 << "\n";
-              outs() << "\n -------------------------------- \n";
+              outs() << "\n -------------------------------- \n";           
+              outs() << "\n -------- Livello: " << dep->getLevels() << " -------- \n";
               cont++;
-              check = true;
-            }        
+            }*/
+
+            /*
+            if(dep->isConfused()){
+              //check = true;
+              return true;
+            }*/
+            
+            if(dep && !dep->isConfused() && dep->isAnti() && dep->isFlow()){
+
+                outs() << "\n -------- Dipendenze -------- \n";
+                dep->dump(outs());
+                outs() << "\n Istruzione L0: " << Instr0 << " Livello: " << L0->getLoopDepth() << "\n";
+                outs() << "\n Livelli: " << dep->getLevels() << "\n";
+                outs() << "\n Istruzione L1: " << Instr1 << " Livello: " << L1->getLoopDepth() << "\n";
+                outs() << "\n -------------------------------- \n";
+                
+                cont++;
+                check = true;
+              
+            }
           }
         }
       }
     }
   }
-
-  outs() << "\n Numero di dipendenze:" << cont << "\n";
+  
+  outs() << "\n Numero di dipendenze: " << cont << "\n";
   return check;
+}
+
+void fuseLoops(Loop * L0, Loop * L1){
+  if(L0){
+    BasicBlock * latch0 = L0->getLoopLatch();
+    BasicBlock * latch1 = L1->getLoopLatch();
+    //BasicBlock * exitingBlock0 = L0->getExitingBlock();
+    //BasicBlock * exitingBlock1 = L1->getExitingBlock();
+    BasicBlock * header0 = L0->getHeader();
+    BasicBlock * header1 = L1->getHeader();
+    
+    BasicBlock * exitBlock1 = L1->getExitBlock();
+
+    //1: Header0 --> Exit1
+    outs() << "\n -------- L0 Latch -------- \n" << *latch0;
+    outs() << "\n -------- L1 Latch -------- \n" << *latch1;
+
+    Instruction & lastHeader0 = *header0->rbegin();
+    outs() << "\n -------- Last Instruction Header0 (before) -------- \n" << lastHeader0 << "\n";
+    lastHeader0.setOperand(1, exitBlock1);
+    outs() << "\n -------- Last Instruction Header0 (after) -------- \n" << lastHeader0 << "\n";
+
+    //2: Body0 --> Body1 --> Latch0
+    Instruction & lastBody0 = *(latch0->getSinglePredecessor()->rbegin());
+    outs() << "\n -------- Last Instruction Body0 (before) -------- \n" << lastBody0 << "\n";
+    Instruction & lastHeader1 = *header1->rbegin();
+    //outs() << "\n -------- Operand Header1 -------- \n" << *lastHeader1.getOperand(2) << "\n";
+    lastBody0.setOperand(0, lastHeader1.getOperand(2));
+    Instruction & firstHeader0 = *header0->begin();
+    Instruction & firstHeader1 = *header1->begin();
+    firstHeader1.replaceAllUsesWith(&firstHeader0);
+    outs() << "\n -------- Last Instruction Body0 (after) -------- \n" << lastBody0 << "\n";
+
+    //3: Header1 --> Latch1
+    outs() << "\n -------- Last Instruction Header1 (before) -------- \n" << lastHeader1 << "\n";
+    lastHeader1.setOperand(1, latch1);
+    outs() << "\n -------- Last Instruction Header1 (after) -------- \n" << lastHeader1 << "\n";
+
+  }
+
 }
 
 PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) {
@@ -153,7 +254,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
   //BasicBlock * exitingBlock = NULL;
 
   for(auto L = LI.rbegin(); L != LI.rend(); ++L){
-    Loop & loop = **L;
+    Loop * loop = *L;
     
     /*Stampa informazioni inerenti al Loop*/
 
@@ -181,7 +282,8 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
 
     /*Punto 2: si assume che i cicli FOR abbiano un numero costante di cicli e non N*/
     //exitingBlock = loop.getExitingBlock();
-    int TC1 = SE.getSmallConstantTripCount(&loop);
+    int TC1 = SE.getSmallConstantTripCount(loop);
+
     outs() << "\n -------- Loop Trip Count: " << TC1 << " --------- \n";
     if(checkLoopTripCount(TC0, TC1)){
       outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " hanno lo stesso Trip Count (" << TC0 << ") -------- \n";
@@ -192,14 +294,20 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
     if(checkDependence(L0, loop, DI)){
       outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " hanno delle istruzioni che dipendono tra di loro -------- \n";
     }
-    L0 = &loop;
+
+    
+    fuseLoops(L0, loop);
+
+    L0 = loop;
+
+
   
     /*Variabili si aggiornano solo al termine di una iterazione, 
     in modo tale da contenere le informazioni della iterazione precedente*/
 
     //BBTopL0 = topLoopBB(loop, exitBlock);
     BBTopL0 = BBTopL1;
-    exitBlock = loop.getExitBlock();
+    exitBlock = loop->getExitBlock();
     //exitingBlock = loop.getExitingBlock();
     
     cont++;
