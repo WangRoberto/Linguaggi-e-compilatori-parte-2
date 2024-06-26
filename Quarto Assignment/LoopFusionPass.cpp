@@ -135,7 +135,7 @@ bool checkDependence(Loop * L0, Loop * L1, DependenceInfo & DI){
         
         for(auto I1 = BB1.begin(); I1 != BB1.end(); ++I1){
           Instruction & Instr1 = *I1;
-          outs() << "\n Istruzione L1: " << Instr1 << "\n";
+          //outs() << "\n Istruzione L1: " << Instr1 << "\n";
           auto dep = DI.depends(&Instr0, &Instr1, true);
           
           /*if(dep){
@@ -332,92 +332,109 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
   Loop * L0 = NULL;
   Loop * loop;
 
-  bool Transformed = false;
+  bool Transformed = true;
   
   //BasicBlock * exitingBlock = NULL;
 
-  for(auto L = LI.rbegin(); L != LI.rend(); L0 = loop, BBTopL0 = BBTopL1, exitBlock = loop->getExitBlock(), cont++, ++L){
-    loop = *L;
-    /*Stampa informazioni inerenti al Loop*/
-
-    myPrintLoop(loop, cont);
+  while(Transformed != false){
     
-    /*Punto 1: si assume che ci sia solo un successore, ovvero un solo
-    exitBlock*/
+    outs() << "\nOK\n";
+    //Transformed = false;
+    for(auto L = LI.rbegin(); L != LI.rend(); L0 = loop, BBTopL0 = BBTopL1, exitBlock = loop->getExitBlock(), cont++, ++L){
+      
+      loop = *L;
+      /*Stampa informazioni inerenti al Loop*/
 
-    BBTopL1 = topLoopBB(loop, exitBlock);
+      myPrintLoop(loop, cont);
+      
+      /*Punto 1: si assume che ci sia solo un successore, ovvero un solo
+      exitBlock*/
 
-    if(!checkLoopAdiacenti(exitBlock, BBTopL1)){
-      outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON sono Adiacenti -------- \n";
-      //outs() << *exitBlock;
-      //outs() << *BBTopL1;
-      continue;
-    }
+      BBTopL1 = topLoopBB(loop, exitBlock);
 
-    outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " sono Adiacenti -------- \n";
+      if(!checkLoopAdiacenti(exitBlock, BBTopL1)){
+        outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON sono Adiacenti -------- \n";
+        //outs() << *exitBlock;
+        //outs() << *BBTopL1;
+        Transformed = false;
+        continue;
+      }
 
-    /*Punto 3: si assume che ci sia solo un successore, ovvero un solo
-    exitBlock*/
-    
-    if(!checkLoopControlFlowEquivalent(DT, PDT, BBTopL1, BBTopL0, exitBlock, cont)){
-      outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON sono Control Flow Equivalenti -------- \n";
-      continue;
-    }
-    
-    outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " sono Control Flow Equivalenti -------- \n";
+      outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " sono Adiacenti -------- \n";
 
-
-    /*Punto 2: si assume che i cicli FOR abbiano un numero costante di cicli e non N*/
-    //exitingBlock = loop.getExitingBlock();
-
-    //outs() << "\n -------- Loop Trip Count: " << TC1 << " --------- \n";
-    if(!checkLoopTripCount(SE, L0, loop)){
-      outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON hanno lo stesso Trip Count  -------- \n";
-      continue;
-    }
-
-    outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " hanno lo stesso Trip Count  -------- \n";
+      /*Punto 3: si assume che ci sia solo un successore, ovvero un solo
+      exitBlock*/
+      
+      if(!checkLoopControlFlowEquivalent(DT, PDT, BBTopL1, BBTopL0, exitBlock, cont)){
+        outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON sono Control Flow Equivalenti -------- \n";
+        Transformed = false;
+        continue;
+      }
+      
+      outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " sono Control Flow Equivalenti -------- \n";
 
 
-    /*Punto 4*/
-    if(!checkDependence(L0, loop, DI)){
+      /*Punto 2: si assume che i cicli FOR abbiano un numero costante di cicli e non N*/
+      //exitingBlock = loop.getExitingBlock();
+
+      //outs() << "\n -------- Loop Trip Count: " << TC1 << " --------- \n";
+      if(!checkLoopTripCount(SE, L0, loop)){
+        outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON hanno lo stesso Trip Count  -------- \n";
+        Transformed = false;
+        continue;
+      }
+
+      outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " hanno lo stesso Trip Count  -------- \n";
+
+
+      /*Punto 4*/
+      if(checkDependence(L0, loop, DI)){
+        outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " hanno delle istruzioni che dipendono tra di loro -------- \n";
+        Transformed = false;
+        continue;
+      }
+
       outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON hanno delle istruzioni che dipendono tra di loro -------- \n";
-      continue;
+
+
+      if(fuseLoops(L0, loop)){
+        Transformed = true;
+        AM.clear();
+        cont = 0;
+      }
+      
+    
+      /*Variabili si aggiornano solo al termine di una iterazione, 
+      in modo tale da contenere le informazioni della iterazione precedente*/
+
+      //BBTopL0 = topLoopBB(loop, exitBlock);
+      
+      //exitingBlock = loop.getExitingBlock();
+
+      //exitingBlocks.clear();
+      //loop.getExitingBlocks(exitingBlocks);
     }
 
-    outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " hanno delle istruzioni che dipendono tra di loro -------- \n";
-
-
-    if(fuseLoops(L0, loop)){
-      Transformed = true;
-    }
-    
-  
-    /*Variabili si aggiornano solo al termine di una iterazione, 
-    in modo tale da contenere le informazioni della iterazione precedente*/
-
-    //BBTopL0 = topLoopBB(loop, exitBlock);
-    
-    //exitingBlock = loop.getExitingBlock();
-
-    //exitingBlocks.clear();
-    //loop.getExitingBlocks(exitingBlocks);
+    AM.getResult<LoopAnalysis>(F);
   }
 
   outs() << "\n";
   
-  
+  /*
   outs() << "\n---------- PROGRAM CFG ----------\n";
   for (auto &BB : F) {
     outs() << BB;
   }
-  
-  
-  if(Transformed){
-    return PreservedAnalyses::none();
-  }
+  */
 
-  /*
+  //LoopInfo & LI = LoopAnalysis::run(F, AM);
+  //AM.clear();
+/*
+  cont = 0;
+  myPrintLoop(L0, cont);
+*/
+  /*AM.getResult<LoopAnalysis>(F);
+  
   cont = 0;
 
   for(auto L = LI.rbegin(); L != LI.rend(); ++L){
@@ -426,9 +443,14 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
     //Stampa informazioni inerenti al Loop
 
     myPrintLoop(loop, cont);
+    cont++;
+  }
+  */
+
+  if(Transformed){
+    return PreservedAnalyses::none();
   }
   
-  */
 
   /*for (auto Fiter = M.begin(); Fiter != M.end(); ++Fiter)
     if (runOnFunction(*Fiter))
