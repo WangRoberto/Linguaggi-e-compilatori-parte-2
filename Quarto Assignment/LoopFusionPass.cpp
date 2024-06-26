@@ -16,6 +16,8 @@
 #include "llvm/Analysis/PostDominators.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
+#include "llvm/ADT/StringRef.h"
+
 //#include "llvm/Analysis/ScalarEvolutionExpressions.h"
 
 //#include <memory>
@@ -78,11 +80,14 @@ bool checkLoopControlFlowEquivalent(DominatorTree & DT, PostDominatorTree & PDT,
   bool isPostDominated = false;
 
   if(BBTopL0){
+
+    outs() << "\n --------- ROOT: " << *DT.getRoot() << " --------- \n";
+
     Instruction & I0 = *BBTopL0->begin();
     if(DT.dominates(&I0, BBTopL1)){
       isDominated = true;
     }
-
+    
     Instruction & I1 = *BBTopL1->begin();
 
     if(PDT.dominates(&I1, &I0)){
@@ -101,6 +106,9 @@ bool checkLoopTripCount(ScalarEvolution & SE, Loop * L0, Loop * L1){
   if(!L0 || !L1){
     return false;
   }
+
+      outs() << "\n CI SONO!!! \n";
+
 
   const SCEV * TC0 = SE.getBackedgeTakenCount(L0);
   const SCEV * TC1 = SE.getBackedgeTakenCount(L1);
@@ -310,19 +318,41 @@ bool fuseLoops(Loop * L0, Loop * L1){
   return true;
 }
 
+/*
+bool matchLivello(Loop * L, int livelloLoop){
+  //Idea per il caso generale, esempio in cui ci sono più 2 livelli
+  SmallVector<Loop *> innerLoops;
 
+  if(L->getLoopDepth() != livelloLoop){
+    innerLoops = L->getSubLoops();
+
+    if(!innerLoops){
+      return false;
+    }
+
+    if(innerLoop.size() < 2){
+      return false;
+    }
+
+    for(auto innerLoop = innerLoops.begin(); innerLoop != innerLoops.end(); ++innerLoop){
+      matchLivello(innerLoop, livelloLoop);
+    }
+
+  }
+  return true;
+}
+*/
 
 PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) {
 
   LoopInfo &LI = AM.getResult<LoopAnalysis>(F);
   DominatorTree &DT = AM.getResult<DominatorTreeAnalysis>(F);
   PostDominatorTree &PDT = AM.getResult<PostDominatorTreeAnalysis>(F);
-
   ScalarEvolution &SE = AM.getResult<ScalarEvolutionAnalysis>(F);
-
   DependenceInfo &DI = AM.getResult<DependenceAnalysis>(F);
 
   int cont = 0; //Numera i loop
+  int contNPassi = 0;
 
   //SmallVector <BasicBlock *> exitingBlocks;
   
@@ -333,16 +363,40 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
   Loop * loop;
 
   bool Transformed = true;
+
+  int livelloLoop = 1;
   
   //BasicBlock * exitingBlock = NULL;
 
   while(Transformed != false){
+
+    BBTopL0 = NULL;
+    BBTopL1 = NULL;
+    exitBlock = NULL;
+    L0 = NULL;
+    loop = NULL;
     
-    outs() << "\nOK\n";
-    //Transformed = false;
+    outs() << "\n -------------------------------- Passo N°" << contNPassi << " -------------------------------- \n";
+    Transformed = false;
     for(auto L = LI.rbegin(); L != LI.rend(); L0 = loop, BBTopL0 = BBTopL1, exitBlock = loop->getExitBlock(), cont++, ++L){
       
+      if(livelloLoop == 2){
+
+      }
+
       loop = *L;
+
+      /*
+      if(!matchLivello(loop, livelloLoop)){
+        outs() << "\n -------- Livello: NO MATCH -------- \n";
+        Transformed = false;
+        continue;
+      }
+
+      outs() << "\n -------- Livello: MATCH -------- \n";
+      */
+      
+
       /*Stampa informazioni inerenti al Loop*/
 
       myPrintLoop(loop, cont);
@@ -356,7 +410,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
         outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON sono Adiacenti -------- \n";
         //outs() << *exitBlock;
         //outs() << *BBTopL1;
-        Transformed = false;
+        //Transformed = false;
         continue;
       }
 
@@ -367,7 +421,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
       
       if(!checkLoopControlFlowEquivalent(DT, PDT, BBTopL1, BBTopL0, exitBlock, cont)){
         outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON sono Control Flow Equivalenti -------- \n";
-        Transformed = false;
+        //Transformed = false;
         continue;
       }
       
@@ -380,7 +434,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
       //outs() << "\n -------- Loop Trip Count: " << TC1 << " --------- \n";
       if(!checkLoopTripCount(SE, L0, loop)){
         outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON hanno lo stesso Trip Count  -------- \n";
-        Transformed = false;
+        //Transformed = false;
         continue;
       }
 
@@ -388,9 +442,9 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
 
 
       /*Punto 4*/
-      if(checkDependence(L0, loop, DI)){
+      if(!checkDependence(L0, loop, DI)){
         outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " hanno delle istruzioni che dipendono tra di loro -------- \n";
-        Transformed = false;
+        //Transformed = false;
         continue;
       }
 
@@ -399,8 +453,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
 
       if(fuseLoops(L0, loop)){
         Transformed = true;
-        AM.clear();
-        cont = 0;
+        //break;
       }
       
     
@@ -415,8 +468,32 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
       //loop.getExitingBlocks(exitingBlocks);
     }
 
-    AM.getResult<LoopAnalysis>(F);
+    if(Transformed){
+      outs() << "\n -------- STO PULENDO -------- \n";
+      AM.clear();
+     
+      if(AM.empty()){
+        outs() << "\n -------- VUOTO -------- \n";
+      }
+
+      outs() << "\n -------- OTTENGO I RISULTATI --------\n";
+
+      /*Aggiorna le analisi*/
+      AM.getResult<LoopAnalysis>(F);
+      AM.getResult<DominatorTreeAnalysis>(F);
+      AM.getResult<PostDominatorTreeAnalysis>(F);
+      AM.getResult<ScalarEvolutionAnalysis>(F);
+      AM.getResult<DependenceAnalysis>(F);
+      
+      cont = 0;
+      contNPassi++;
+      livelloLoop++;  
+    }
   }
+
+
+
+
 
   outs() << "\n";
   
