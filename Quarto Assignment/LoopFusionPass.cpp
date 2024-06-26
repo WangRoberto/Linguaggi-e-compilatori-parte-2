@@ -18,9 +18,8 @@
 
 #include "llvm/ADT/StringRef.h"
 
-//#include "llvm/Analysis/ScalarEvolutionExpressions.h"
-
-//#include <memory>
+#include "llvm/Analysis/ScalarEvolutionExpressions.h"
+#include <memory>
 
 using namespace llvm;
 
@@ -121,110 +120,140 @@ bool checkLoopTripCount(ScalarEvolution & SE, Loop * L0, Loop * L1){
   
 }
 
-/*Controlla se ci sono istruzioni di L1 che dipendono da L0*/
-bool checkDependence(Loop * L0, Loop * L1, DependenceInfo & DI){
-  int cont = 0;
-  bool check = false;
+const SCEVAddRecExpr* convertSCEVToAddRecExpr(const SCEV* mySCEV, const Loop *L, ScalarEvolution &SE){
+  SmallPtrSet<const SCEVPredicate *, 4> Predicates;
+  return SE.convertSCEVToAddRecWithPredicates(mySCEV, L, Predicates);
+}
 
-  if(!L0 || !L1){
+const SCEV* getBaseSCEV(const SCEVAddRecExpr *addRecExpr){
+  if(!addRecExpr){
+    return nullptr;
+  }
+
+  const SCEVAddExpr *addExpr = dyn_cast<SCEVAddExpr>(addRecExpr->getOperand(0));
+  if(!addExpr){
+    return addRecExpr->getOperand(0);
+  }
+  return addExpr->getOperand(1);
+}
+
+const SCEVConstant* getOffsetSCEV(const SCEVAddRecExpr *addRecExpr, const Instruction *I, ScalarEvolution &SE){
+  if(!addRecExpr){
+    return nullptr;
+  }
+
+  const SCEVAddExpr *addExpr = dyn_cast<SCEVAddExpr>(addRecExpr->getOperand(0));
+  if(!addExpr){
+    int32_t N = 0;
+    LLVMContext &context = I->getContext();
+    IntegerType *Int32Type = IntegerType::get(context, 32);
+    ConstantInt *Val = ConstantInt::get(Int32Type, N);
+    const SCEV *constSCEV = SE.getConstant(Val);
+    return dyn_cast<SCEVConstant>(constSCEV);
+  }
+  return dyn_cast<SCEVConstant>(addExpr->getOperand(0));
+}
+
+bool isDistanceNegative(std::unique_ptr<Dependence> &dep, const Loop *L0, const Loop *L1, ScalarEvolution &SE){
+  outs() << "\n -------- Negative distance dependency analysis -------- \n";
+  if(!dep->isFlow() && !dep->isAnti()){
     return false;
   }
 
+  Instruction *I0 = dep->getSrc();
+  Instruction *I1 = dep->getDst();
+  if(!I0 || !I1){
+    return true;
+  }
 
-  for(auto B0 = L0->block_begin(); B0 != L0->block_end(); ++B0){
-    BasicBlock & BB0 = **B0;
-    
-    for(auto I0 = BB0.begin(); I0 != BB0.end(); ++I0){
-      Instruction & Instr0 = *I0;
-      outs() << "\n -------------------------------- \n Istruzione L0: " << Instr0 << "\n -------------------------------- \n";
-      
-      for(auto B1 = L1->block_begin(); B1 != L1->block_end(); ++B1){
-        BasicBlock & BB1 = **B1;
-        
-        for(auto I1 = BB1.begin(); I1 != BB1.end(); ++I1){
-          Instruction & Instr1 = *I1;
-          //outs() << "\n Istruzione L1: " << Instr1 << "\n";
-          auto dep = DI.depends(&Instr0, &Instr1, true);
-          
-          /*if(dep){
-            bool isNegativeDependence = false;
-            for(unsigned i = 1; i <= dep->getLevels(); i++){
-              if(dep->getDirection(i) == Dependence::DVEntry::NEGATIVE){
-                isNegativeDependence =true;
-                break;
-              }
-            }
-          }*/
+  // Get SCEV of getelementptr
+  const SCEV *I0SCEV = SE.getSCEVAtScope(I0->getOperand(dep->isFlow()), L0);
+  const SCEV *I1SCEV = SE.getSCEVAtScope(I1->getOperand(dep->isAnti()), L1);
 
-          /*if(!dep){
-            continue;
-          }*/
+  // Check if SCEV can compute and represent them
+  if(isa<SCEVCouldNotCompute>(I0SCEV) || isa<SCEVCouldNotCompute>(I1SCEV)){
+    return true;
+  }
 
-          /*
-          if(dep){
-            outs() << "\n -------- Livello: " << dep->getLevels() << " --------- \n";
-            for(unsigned Level = 0; Level <= dep->getLevels(); ++Level){
-              const SCEV *Distance = dep->getDistance(Level);
-              if(Distance && !isa <SCEVCouldNotCompute> (Distance)){
-              const auto * ConstDist = dyn_cast<SCEVConstant>(Distance);
-              
-                if(ConstDist && ConstDist->getValue()->isNegative()){
-                  cont ++;
-                  check = true;
-                } 
-              }
-            }
-          }*/
-          
-          /*
-          if(dep){   
-            outs() << "\n -------- Dipendenze -------- \n";
-            dep->dump(outs());
-            outs() << "\n Istruzione L0: " << Instr0 << "\n";
-            outs() << "\n Istruzione L1: " << Instr1 << "\n";
-            outs() << "\n -------------------------------- \n";           
-            outs() << "\n -------- Livello: " << dep->getLevels() << " -------- \n";
-            cont++;
-          }*/
+  // SCEVTypes 5 == AddExpr, SCEVTypes 8 == AddRecExpr
+  outs() << "I0SCEV: " << *I0SCEV << "\t" << I0SCEV->getSCEVType() << "\n";
+  outs() << "I1SCEV: " << *I1SCEV << "\t" << I1SCEV->getSCEVType() << "\n";
 
-          /*
-          if(dep->isConfused()){
-            //check = true;
-            return true;
-          }*/
-          
-          if(dep && !dep->isConfused() && dep->isOrdered()){
+  // Check if they are AddRecExpr
+  const SCEVAddRecExpr *I0AddRecExpr = convertSCEVToAddRecExpr(I0SCEV, L0, SE);
+  const SCEVAddRecExpr *I1AddRecExpr = convertSCEVToAddRecExpr(I1SCEV, L1, SE);
 
+  if(!I0AddRecExpr || !I1AddRecExpr){
+    return true;
+  }
+  
+  outs() << "I0AddRecExpr: " << *I0AddRecExpr << "\n";
+  outs() << "I1AddRecExpr: " << *I1AddRecExpr << "\n";
+
+  // Check if they share same step (if two SCEV expressions are equivalent, they are pointer equal)
+  const SCEV *I0Step = I0AddRecExpr->getOperand(1);
+  const SCEV *I1Step = I1AddRecExpr->getOperand(1);
+
+  if(I0Step != I1Step){
+    return true;
+  }
+
+  // Compute starting values: base and offset
+  const SCEV *I0Base = getBaseSCEV(I0AddRecExpr);
+  const SCEV *I1Base = getBaseSCEV(I1AddRecExpr);
+  const SCEVConstant *I0Offset = getOffsetSCEV(I0AddRecExpr, I0, SE);
+  const SCEVConstant *I1Offset = getOffsetSCEV(I1AddRecExpr, I1, SE);
+  outs() << "I0Base: " << *I0Base << "\n";
+  outs() << "I1Base: " << *I1Base << "\n";
+  outs() << "I0Offset: " << *I0Offset << "\n";
+  outs() << "I1Offset: " << *I1Offset << "\n";
+  if(!(I0Base && I1Base && I0Offset && I1Offset)){
+    return true;
+  }
+
+  // Don't share same base
+  if(I0Base != I1Base){
+    return true;
+  }
+
+  // Check if distance is negative
+  return SE.isKnownPredicate(ICmpInst::ICMP_SLT, I0Offset, I1Offset);
+}
+
+/*Controlla se ci sono istruzioni di L1 che dipendono da L0*/
+bool checkDependence(const Loop *L0, const Loop *L1, DependenceInfo &DI, ScalarEvolution &SE){
+  int cont = 0;
+  bool check = false;
+
+  if(L0){
+    for(auto BB0 = L0->block_begin(); BB0 != L0->block_end(); ++BB0){
+      for(auto I0 = (*BB0)->begin(); I0 != (*BB0)->end(); ++I0){
+        outs() << "\n -------------------------------- \n Istruzione L0: " << *I0 << "\n -------------------------------- \n";
+        for(auto BB1 = L1->block_begin(); BB1 != L1->block_end(); ++BB1){
+          for(auto I1 = (*BB1)->begin(); I1 != (*BB1)->end(); ++I1){
+            outs() << "\n Istruzione L1: " << *I1 << "\n";
+            std::unique_ptr<Dependence> dep = DI.depends(&*I0, &*I1, true);
+
+	    if(!dep || dep->isConfused()){
+	      continue;
+	    }
+
+	    if(isDistanceNegative(dep, L0, L1, SE)){
               outs() << "\n -------- Dipendenze -------- \n";
-              dep->dump(outs());
-              outs() << "\n Istruzione L0: " << Instr0 << " Livello: " << L0->getLoopDepth() << "\n";
-              outs() << "\n Livelli: " << dep->getLevels() << "\n";
-              outs() << "\n Istruzione L1: " << Instr1 << " Livello: " << L1->getLoopDepth() << "\n";
+	      dep->dump(outs());
+              outs() << "\n Istruzione L0: " << *I0 << "\n";
+              outs() << "\n Istruzione L1: " << *I1 << "\n";
               outs() << "\n -------------------------------- \n";
-              
-              auto fullDep = FullDependence(&Instr0, &Instr1, true, 1);
-              outs() << "\n Livelli: " << fullDep.getLevels() << "\n";
-              const SCEV * D = fullDep.getDistance(2);
-
-              if(fullDep.isDirectionNegative()){
-                outs() << "\n Direzione: " << fullDep.getDirection(fullDep.getLevels()) << "\n";
-              }
-
-              if(D){
-                outs() << "\n Distanza: " << D << "\n";
-              }
-
               cont++;
               check = true;
-            
+	    }
           }
         }
       }
     }
   }
-  
-  
-  outs() << "\n Numero di dipendenze: " << cont << "\n";
+
+  outs() << "\n Numero di dipendenze:" << cont << "\n";
   return check;
 }
 
@@ -442,7 +471,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
 
 
       /*Punto 4*/
-      if(!checkDependence(L0, loop, DI)){
+      if(!checkDependence(L0, loop, DI, SE)){
         outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " hanno delle istruzioni che dipendono tra di loro -------- \n";
         //Transformed = false;
         continue;
