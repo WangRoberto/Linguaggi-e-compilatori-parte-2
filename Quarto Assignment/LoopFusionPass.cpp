@@ -7,19 +7,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Utils/LoopFusionPass.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/InstrTypes.h"
-#include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Support/GenericLoopInfo.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/IR/Dominators.h"
-#include "llvm/Analysis/PostDominators.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
+/*
 #include "llvm/ADT/StringRef.h"
-
-#include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include <memory>
+*/
 
 using namespace llvm;
 
@@ -60,7 +52,7 @@ bool checkLoopAdiacenti(BasicBlock * loopSuccessor0, BasicBlock * BBTopL1){
 
 /*Si ottiene il BasicBlock della Guardia oppure quello del PreHeader*/
 
-BasicBlock * topLoopBB(Loop * loop, BasicBlock * exitBlock){
+BasicBlock * topLoopBB(Loop * loop/*, BasicBlock * exitBlock*/){
   if(loop->isGuarded()){
     outs() << "\n -------- Loop è Guarded --------- \n";
     return loop->getLoopGuardBranch()->getParent();
@@ -74,7 +66,7 @@ BasicBlock * topLoopBB(Loop * loop, BasicBlock * exitBlock){
 1. L0 Domina L1
 2. L1 PostDomina L0*/
 
-bool checkLoopControlFlowEquivalent(DominatorTree & DT, PostDominatorTree & PDT, BasicBlock * BBTopL1, BasicBlock * BBTopL0, BasicBlock * exitBlock, int cont){
+bool checkLoopControlFlowEquivalent(DominatorTree & DT, PostDominatorTree & PDT, BasicBlock * BBTopL1, BasicBlock * BBTopL0/*, BasicBlock * exitBlock, int cont*/){
   bool isDominated = false;
   bool isPostDominated = false;
 
@@ -83,18 +75,19 @@ bool checkLoopControlFlowEquivalent(DominatorTree & DT, PostDominatorTree & PDT,
     //outs() << "\n --------- ROOT -------- " << *DT.getRoot();
 
     Instruction & I0 = *BBTopL0->begin();
+
     if(DT.dominates(&I0, BBTopL1)){
       isDominated = true;
     }
-    
+
     Instruction & I1 = *BBTopL1->begin();
 
     if(PDT.dominates(&I1, &I0)){
       isPostDominated = true;
     }
 
-    outs() << "\n L0 Domina L1? " << (isDominated? "True\n" : "False\n");
-    outs() << "\n L1 PostDomina L0? " << (isPostDominated? "True\n" : "False\n");
+    outs() << "\n --------- L0 Domina L1? " << (isDominated? "True --------- \n" : "False --------- \n");
+    outs() << "\n --------- L1 PostDomina L0? " << (isPostDominated? "True --------- \n" : "False --------- \n");
   }
 
   return isDominated & isPostDominated;
@@ -105,8 +98,6 @@ bool checkLoopTripCount(ScalarEvolution & SE, Loop * L0, Loop * L1){
   if(!L0 || !L1){
     return false;
   }
-
-  //outs() << "\n CI SONO!!! \n";
 
   const SCEV * TC0 = SE.getBackedgeTakenCount(L0);
   const SCEV * TC1 = SE.getBackedgeTakenCount(L1);
@@ -175,8 +166,8 @@ bool isDistanceNegative(std::unique_ptr<Dependence> &dep, const Loop *L0, const 
   }
 
   // SCEVTypes 5 == AddExpr, SCEVTypes 8 == AddRecExpr
-  outs() << "I0SCEV: " << *I0SCEV << "\t" << I0SCEV->getSCEVType() << "\n";
-  outs() << "I1SCEV: " << *I1SCEV << "\t" << I1SCEV->getSCEVType() << "\n";
+  outs() << "\n I0SCEV: " << *I0SCEV << "\t" << I0SCEV->getSCEVType() << "\n";
+  outs() << "\n I1SCEV: " << *I1SCEV << "\t" << I1SCEV->getSCEVType() << "\n";
 
   // Check if they are AddRecExpr
   const SCEVAddRecExpr *I0AddRecExpr = convertSCEVToAddRecExpr(I0SCEV, L0, SE);
@@ -186,8 +177,8 @@ bool isDistanceNegative(std::unique_ptr<Dependence> &dep, const Loop *L0, const 
     return true;
   }
   
-  outs() << "I0AddRecExpr: " << *I0AddRecExpr << "\n";
-  outs() << "I1AddRecExpr: " << *I1AddRecExpr << "\n";
+  outs() << "\n I0AddRecExpr: " << *I0AddRecExpr << "\n";
+  outs() << "\n I1AddRecExpr: " << *I1AddRecExpr << "\n";
 
   // Check if they share same step (if two SCEV expressions are equivalent, they are pointer equal)
   const SCEV *I0Step = I0AddRecExpr->getOperand(1);
@@ -202,10 +193,10 @@ bool isDistanceNegative(std::unique_ptr<Dependence> &dep, const Loop *L0, const 
   const SCEV *I1Base = getBaseSCEV(I1AddRecExpr);
   const SCEVConstant *I0Offset = getOffsetSCEV(I0AddRecExpr, I0, SE);
   const SCEVConstant *I1Offset = getOffsetSCEV(I1AddRecExpr, I1, SE);
-  outs() << "I0Base: " << *I0Base << "\n";
-  outs() << "I1Base: " << *I1Base << "\n";
-  outs() << "I0Offset: " << *I0Offset << "\n";
-  outs() << "I1Offset: " << *I1Offset << "\n";
+  outs() << "\n I0Base: " << *I0Base << "\n";
+  outs() << "\n I1Base: " << *I1Base << "\n";
+  outs() << "\n I0Offset: " << *I0Offset << "\n";
+  outs() << "\n I1Offset: " << *I1Offset << "\n";
   if(!(I0Base && I1Base && I0Offset && I1Offset)){
     return true;
   }
@@ -238,10 +229,10 @@ bool checkDependence(const Loop *L0, const Loop *L1, DependenceInfo &DI, ScalarE
             }
 
             if(isDistanceNegative(dep, L0, L1, SE)){
-              outs() << "\n -------- Dipendenze -------- \n";
+              outs() << "\n -------- Negative Dipendence -------- \n\n ";
               dep->dump(outs());
-              outs() << "\n Istruzione L0: " << *I0 << "\n";
-              outs() << "\n Istruzione L1: " << *I1 << "\n";
+              outs() << "\n Instruction L0: " << *I0 << "\n";
+              outs() << "\n Intruction L1: " << *I1 << "\n";
               outs() << "\n -------------------------------- \n";
               cont++;
               check = true;
@@ -252,7 +243,7 @@ bool checkDependence(const Loop *L0, const Loop *L1, DependenceInfo &DI, ScalarE
     }
   }
 
-  outs() << "\n Numero di dipendenze:" << cont << "\n";
+  outs() << "\n -------- Number of Negative Distance:" << cont << " -------- \n";
   return check;
 }
 
@@ -337,11 +328,11 @@ bool fuseLoops(Loop * L0, Loop * L1){
   header1->eraseFromParent();
   latch1->eraseFromParent();
 
-
   /*
   DeleteDeadBlock(preHeader1, nullptr, false);
   DeleteDeadBlock(header1, nullptr, false);
-  DeleteDeadBlock(latch1, nullptr, false);*/
+  DeleteDeadBlock(latch1, nullptr, false);
+  */
 
   return true;
 }
@@ -357,8 +348,6 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
 
   int cont = 0; //Numera i loop
   int contNPasses = 0;
-
-  //SmallVector <BasicBlock *> exitingBlocks;
   
   BasicBlock * BBTopL0 = NULL;
   BasicBlock * BBTopL1;
@@ -371,8 +360,6 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
 
   //int levelLoop = 1;
   //const int maxLevel = 2;
-  
-  //BasicBlock * exitingBlock = NULL;
 
   while(Transformed != false){
 
@@ -395,13 +382,11 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
       /*Punto 1: si assume che ci sia solo un successore, ovvero un solo
       exitBlock*/
 
-      BBTopL1 = topLoopBB(loop, exitBlock);
+      BBTopL1 = topLoopBB(loop/*, exitBlock*/);
 
       if(!checkLoopAdiacenti(exitBlock, BBTopL1)){
         outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON sono Adiacenti -------- \n";
-        //outs() << *exitBlock;
         //outs() << *BBTopL1;
-        //Transformed = false;
         continue;
       }
 
@@ -410,9 +395,8 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
       /*Punto 3: si assume che ci sia solo un successore, ovvero un solo
       exitBlock*/
       
-      if(!checkLoopControlFlowEquivalent(DT, PDT, BBTopL1, BBTopL0, exitBlock, cont)){
+      if(!checkLoopControlFlowEquivalent(DT, PDT, BBTopL1, BBTopL0/*, exitBlock, cont*/)){
         outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON sono Control Flow Equivalenti -------- \n";
-        //Transformed = false;
         continue;
       }
       
@@ -425,7 +409,6 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
       //outs() << "\n -------- Loop Trip Count: " << TC1 << " --------- \n";
       if(!checkLoopTripCount(SE, L0, loop)){
         outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON hanno lo stesso Trip Count  -------- \n";
-        //Transformed = false;
         continue;
       }
 
@@ -435,53 +418,107 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
       /*Punto 4*/
       if(checkDependence(L0, loop, DI, SE)){
         outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " hanno delle istruzioni che dipendono tra di loro -------- \n";
-        //Transformed = false;
         continue;
       }
 
       outs() << "\n -------- L" << (cont - 1) << " e L" << cont << " NON hanno delle istruzioni che dipendono tra di loro -------- \n";
 
+      //LoopNest loopNestL0 = LoopNest(*L0, SE);
+      //LoopNest loopNestL1 = LoopNest(*loop, SE);
 
       if(fuseLoops(L0, loop)){
         Transformed = true;
+        /*
+        Loop * innerL0 = loopNestL0.getInnermostLoop();
+        Loop * innerL1 = loopNestL1.getInnermostLoop();
+
+        if(!innerL0 || !innerL1){
+          continue;
+        }
+
+        cont = 1;
+
+        outs() << "\n -------- Inner L0's Loops -------- \n" << *innerL0 << "\n";
+        outs() << "\n -------- Inner L1's Loops -------- \n" << *innerL1 << "\n";
+
+        outs() << "\n -------- Inner L0's Exit Block -------- \n" << *innerL0->getExitBlock() << "\n";
+        outs() << "\n -------- Inner L1's Exit Block -------- \n" << *innerL1->getLoopPreheader()<< "\n";
+
+        Instruction & lastInnerL0Header = *(innerL0->getHeader()->rbegin());
+        outs() << "\n -------- Inner L0's Header Last Instruction (before) -------- \n" << lastInnerL0Header << "\n";
+        lastInnerL0Header.setOperand(1, innerL1->getLoopPreheader());
+        outs() << "\n -------- Inner L0's Header Last Instruction (after) -------- \n" << lastInnerL0Header << "\n";
+
+        BasicBlock * BBTopInnerL0 = topLoopBB(innerL0);
+        BasicBlock * BBTopInnerL1 = topLoopBB(innerL1);
+        BasicBlock * BBinnerL0Exit = innerL0->getExitBlock();
+
+        if(!checkLoopAdiacenti(BBinnerL0Exit, BBTopInnerL1)){
+          outs() << "\n -------- Inner L" << (cont - 1) << " ed Inner L" << cont << " NON sono Adiacenti -------- \n";
+          continue;
+        }
+
+        outs() << "\n -------- Inner L" << (cont - 1) << " ed Inner L" << cont << " sono Adiacenti -------- \n";
+        
+        if(!checkLoopControlFlowEquivalent(DT, PDT, BBTopInnerL0, BBTopInnerL1)){
+          outs() << "\n -------- Inner L" << (cont - 1) << " ed Inner L" << cont << " NON sono Control Flow Equivalenti -------- \n";
+          continue;
+        }
+      
+        outs() << "\n -------- Inner L" << (cont - 1) << " ed Inner L" << cont << " sono Control Flow Equivalenti -------- \n";
+
+        //outs() << "\n -------- Loop Trip Count: " << TC1 << " --------- \n";
+        if(!checkLoopTripCount(SE, innerL0, innerL1)){
+          outs() << "\n -------- Inner L" << (cont - 1) << " ed Inner L" << cont << " NON hanno lo stesso Trip Count  -------- \n";
+          continue;
+        }
+
+        outs() << "\n -------- Inner L" << (cont - 1) << " ed Inner L" << cont << " hanno lo stesso Trip Count  -------- \n";
+
+        if(checkDependence(innerL0, innerL1, DI, SE)){
+          outs() << "\n -------- Inner L" << (cont - 1) << " ed Inner L" << cont << " hanno delle istruzioni che dipendono tra di loro -------- \n";
+          continue;
+        }
+
+        outs() << "\n -------- Inner L" << (cont - 1) << " ed Inner L" << cont << " NON hanno delle istruzioni che dipendono tra di loro -------- \n";
+
+        fuseLoops(innerL0, innerL1);*/
         //break;
       }
       
     
       /*Variabili si aggiornano solo al termine di una iterazione, 
       in modo tale da contenere le informazioni della iterazione precedente*/
-
-      //BBTopL0 = topLoopBB(loop, exitBlock);
-      
-      //exitingBlock = loop.getExitingBlock();
-
-      //exitingBlocks.clear();
-      //loop.getExitingBlocks(exitingBlocks);
     }
 
+    
     if(Transformed){
       //outs() << "\n -------- STO PULENDO -------- \n";
       AM.clear();
      
-      /*
+    /*  
       if(AM.empty()){
         outs() << "\n -------- VUOTO -------- \n";
       }
       
       outs() << "\n -------- OTTENGO I RISULTATI --------\n";
-
-      */
+    */
 
       /*"Aggiorna le analisi"*/
       AM.getResult<LoopAnalysis>(F);
+      //AM.getResult<DominatorTreeAnalysis>(F);
+      //AM.getResult<PostDominatorTreeAnalysis>(F);
+      //AM.getResult<ScalarEvolutionAnalysis>(F);
+      //AM.getResult<DependenceAnalysis>(F);
 
       cont = 0;
       contNPasses++;
       //levelLoop++;  
     }
+    
   }
 
-  outs() << "\n";
+  outs() << "\n -------------------------------- END -------------------------------- \n";
   
   /*
   outs() << "\n---------- PROGRAM CFG ----------\n";
@@ -509,6 +546,7 @@ PreservedAnalyses LoopFusionPass::run(Function &F, FunctionAnalysisManager &AM) 
     cont++;
   }
   */
+
 
   if(Transformed){
     return PreservedAnalyses::none();
